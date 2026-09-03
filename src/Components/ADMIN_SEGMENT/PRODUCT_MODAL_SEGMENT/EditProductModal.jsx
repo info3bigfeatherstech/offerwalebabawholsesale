@@ -19,6 +19,10 @@ import {
   getWholesaleVisibility,
 } from "../ADMIN_REDUX_MANAGEMENT/adminEditProductSlice";
 import { shippingFormFromVariant } from "../../../utils/variantCatalogForm";
+import {
+  applyVariantMergeToFormData,
+  resolvePrimaryAttributes,
+} from "../../../utils/editProductVariantMerge";
 
 const formatIndianRupee = (amount) =>
   new Intl.NumberFormat("en-IN", {
@@ -211,8 +215,12 @@ const EditProductModal = ({ product, onClose, brands, setBrands }) => {
           variantUpdatePayload.variantShipping = variantToSave.shipping;
         }
         const result = await dispatch(updateVariantByBarcode(variantUpdatePayload)).unwrap();
-        if (result?.product?.variants)
-          setFormData((prev) => ({ ...prev, variants: normaliseVariants(result.product.variants) }));
+        if (result?.product?.variants) {
+          const savedIdx = editingVariantIndex;
+          setFormData((prev) =>
+            applyVariantMergeToFormData(prev, result.product.variants, normaliseVariants, savedIdx)
+          );
+        }
         closeVariantModal();
       } catch (err) {
         setVariantSaveError(typeof err === "string" ? err : err?.message || "Failed to save variant");
@@ -227,8 +235,11 @@ const EditProductModal = ({ product, onClose, brands, setBrands }) => {
             channelVisibility: channelVisibilityPayload,
           }
         })).unwrap();
-        if (result?.product?.variants)
-          setFormData((prev) => ({ ...prev, variants: normaliseVariants(result.product.variants) }));
+        if (result?.product?.variants) {
+          setFormData((prev) =>
+            applyVariantMergeToFormData(prev, result.product.variants, normaliseVariants, null)
+          );
+        }
         closeVariantModal();
       } catch (err) {
         setVariantSaveError(typeof err === "string" ? err : err?.message || "Failed to add variant");
@@ -257,8 +268,11 @@ const EditProductModal = ({ product, onClose, brands, setBrands }) => {
         isActive: newActiveState,
         channelVisibility: { ecomm: newEcommVisibility },
       })).unwrap();
-      if (result?.product?.variants)
-        setFormData((p) => ({ ...p, variants: normaliseVariants(result.product.variants) }));
+      if (result?.product?.variants) {
+        setFormData((p) =>
+          applyVariantMergeToFormData(p, result.product.variants, normaliseVariants, index)
+        );
+      }
     } catch (err) {
       setFormData((p) => ({ ...p, variants: prevVariants }));
       alert(`Toggle failed: ${typeof err === "string" ? err : err?.message || "Unknown error"}`);
@@ -275,7 +289,11 @@ const EditProductModal = ({ product, onClose, brands, setBrands }) => {
     dispatch(deleteVariantFromProduct({ slug: product.slug, barcode: variant.productCode }))
       .unwrap()
       .then(({ product: updated }) => {
-        if (updated?.variants) setFormData((p) => ({ ...p, variants: normaliseVariants(updated.variants) }));
+        if (updated?.variants) {
+          setFormData((p) =>
+            applyVariantMergeToFormData(p, updated.variants, normaliseVariants, null)
+          );
+        }
       })
       .catch((err) => {
         setFormData((p) => ({ ...p, variants: prevVariants }));
@@ -350,8 +368,9 @@ const EditProductModal = ({ product, onClose, brands, setBrands }) => {
         wholesale: wholesaleVisibility,
       };
 
+      const primaryAttributes = resolvePrimaryAttributes(formData);
+
       try {
-        // ONLY update variant, do NOT call updateProduct after this
         const result = await dispatch(updateVariantByBarcode({
           slug: product.slug,
           barcode: mainVariant.productCode,
@@ -362,20 +381,20 @@ const EditProductModal = ({ product, onClose, brands, setBrands }) => {
           wholesale: mainVariant.wholesale,
           minimumOrderQuantity: mainVariant.minimumOrderQuantity,
           channelVisibility: channelVisibilityPayload,
-          attributes: mainVariant.attributes,
+          attributes: primaryAttributes,
         })).unwrap();
-        
+
         if (result?.product?.variants) {
-          setFormData((prev) => ({ ...prev, variants: normaliseVariants(result.product.variants) }));
+          setFormData((prev) =>
+            applyVariantMergeToFormData(prev, result.product.variants, normaliseVariants, 0)
+          );
         }
-        
-        // After variant update, update product-level fields separately
+
         await dispatch(updateProduct({
           slug: product.slug,
           formData: {
             ...formData,
-            // Sync product.attributes with primary variant attrs so PDP/admin stay aligned
-            attributes: mainVariant.attributes || formData.attributes || [],
+            attributes: primaryAttributes,
             gstRate: formData.taxRate,
           }
         })).unwrap();

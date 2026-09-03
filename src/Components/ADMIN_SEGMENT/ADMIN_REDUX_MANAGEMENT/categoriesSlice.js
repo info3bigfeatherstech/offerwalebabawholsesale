@@ -37,6 +37,8 @@ export const createCategory = createAsyncThunk(
       if (categoryData.status) fd.append("status", categoryData.status);
       if (categoryData.imageFile instanceof File)
         fd.append("image", categoryData.imageFile);
+      if (categoryData.cardImageFile instanceof File)
+        fd.append("cardImage", categoryData.cardImageFile);
 
       const res = await wholesaleAxios.post("/categories/admin/categories", fd, {
         headers: { "Content-Type": "multipart/form-data" },
@@ -64,6 +66,10 @@ export const updateCategory = createAsyncThunk(
         fd.append("order", categoryData.order);
       if (categoryData.imageFile instanceof File)
         fd.append("image", categoryData.imageFile);
+      if (categoryData.cardImageFile instanceof File)
+        fd.append("cardImage", categoryData.cardImageFile);
+      if (categoryData.removeImage) fd.append("removeImage", "true");
+      if (categoryData.removeCardImage) fd.append("removeCardImage", "true");
 
       const res = await wholesaleAxios.put(`/categories/admin/categories/${id}`, fd, {
         headers: { "Content-Type": "multipart/form-data" },

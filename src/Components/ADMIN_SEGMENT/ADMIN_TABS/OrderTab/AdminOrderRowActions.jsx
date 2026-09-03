@@ -182,9 +182,19 @@ async function executeAction(key, ctx) {
           await ctx.assignShip({ orderId: id }).unwrap();
         } catch (assignErr) {
           if (assignErr?.data?.code === "AWB_ALREADY_ASSIGNED") return;
-          if (assignErr?.data?.code === "QUOTED_COURIER_UNAVAILABLE") {
-            const suggested = assignErr?.data?.suggestedCourier;
+          if (
+            assignErr?.data?.code === "QUOTED_COURIER_UNAVAILABLE" ||
+            assignErr?.data?.code === "NO_ALTERNATE_COURIER"
+          ) {
             const quoted = assignErr?.data?.quotedCourier;
+            let suggested = assignErr?.data?.suggestedCourier;
+            if (
+              suggested?.courierId != null &&
+              quoted?.courierId != null &&
+              Number(suggested.courierId) === Number(quoted.courierId)
+            ) {
+              suggested = null;
+            }
             const quotedFreight = assignErr?.data?.quotedFreightInr;
             const gapLine =
               suggested?.exceedsQuotedFreight &&

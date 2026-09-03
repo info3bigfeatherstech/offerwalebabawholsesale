@@ -35,6 +35,19 @@ const buildInventoryObj = (inv) => ({
   trackInventory: inv?.trackInventory !== false,
 });
 
+const buildSoldInfoForApi = (soldInfo) => ({
+  enabled: soldInfo?.enabled === true,
+  count: parseInt(soldInfo?.count, 10) || 0,
+});
+
+const buildFomoForApi = (fomo) => ({
+  enabled: fomo?.enabled === true,
+  type: ["viewing_now", "product_left", "custom"].includes(fomo?.type) ? fomo.type : "viewing_now",
+  viewingNow: parseInt(fomo?.viewingNow, 10) || 0,
+  productLeft: parseInt(fomo?.productLeft, 10) || 0,
+  customMessage: fomo?.customMessage || "",
+});
+
 /** BASE = left of hyphen, unchanged except trim+uppercase. Suffix only is normalized (01→1). */
 const SUFFIXED_PRODUCT_CODE_REGEX = /^([A-Z0-9]+)-(\d+)$/;
 
@@ -111,13 +124,17 @@ export const createProduct = createAsyncThunk(
 
       const shippingData = {
         ...productData.shipping,
-        weight: productData.shipping?.weight || 0,
-        dimensions: productData.shipping?.dimensions || { length: 0, width: 0, height: 0 },
+        weight: toNum(productData.shipping?.weight) ?? 0,
+        dimensions: {
+          length: toNum(productData.shipping?.dimensions?.length) ?? 0,
+          width: toNum(productData.shipping?.dimensions?.width) ?? 0,
+          height: toNum(productData.shipping?.dimensions?.height) ?? 0,
+        },
       };
       fd.append("shipping", JSON.stringify(shippingData));
 
-      fd.append("soldInfo", JSON.stringify(productData.soldInfo || { enabled: false, count: 0 }));
-      fd.append("fomo", JSON.stringify(productData.fomo || { enabled: false }));
+      fd.append("soldInfo", JSON.stringify(buildSoldInfoForApi(productData.soldInfo)));
+      fd.append("fomo", JSON.stringify(buildFomoForApi(productData.fomo)));
       if (productData.attributes?.length) fd.append("attributes", JSON.stringify(productData.attributes));
 
       const productImageFiles = (productData.images || []).filter((img) => img.file instanceof File);

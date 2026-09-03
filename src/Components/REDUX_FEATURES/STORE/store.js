@@ -26,6 +26,7 @@ import adminAuthReducer from "../../ADMIN_SEGMENT/ADMIN_REDUX_MANAGEMENT/adminAu
 import adminProductCreateReducer from "../../ADMIN_SEGMENT/ADMIN_REDUX_MANAGEMENT/adminProductCreateSlice";
 import adminGetProductsReducer from "../../ADMIN_SEGMENT/ADMIN_REDUX_MANAGEMENT/adminGetProductsSlice";
 import adminEditProductReducer from "../../ADMIN_SEGMENT/ADMIN_REDUX_MANAGEMENT/adminEditProductSlice";
+import inventoryStockReducer from "../../ADMIN_SEGMENT/ADMIN_REDUX_MANAGEMENT/inventoryStockSlice";
 import adminArchivedReducer from "../../ADMIN_SEGMENT/ADMIN_REDUX_MANAGEMENT/adminArchivedSlice";
 import adminBulkUploadReducer from "../../ADMIN_SEGMENT/ADMIN_REDUX_MANAGEMENT/bulkUploadSlice";
 import categoriesReducer from "../../ADMIN_SEGMENT/ADMIN_REDUX_MANAGEMENT/categoriesSlice";
@@ -74,6 +75,7 @@ export const store = configureStore({
     adminProductCreate: adminProductCreateReducer,
     adminGetProducts: adminGetProductsReducer,
     adminEditProduct: adminEditProductReducer,
+    inventoryStock: inventoryStockReducer,
     adminArchived: adminArchivedReducer,
     adminBulkUpload: adminBulkUploadReducer,
     categories: categoriesReducer,

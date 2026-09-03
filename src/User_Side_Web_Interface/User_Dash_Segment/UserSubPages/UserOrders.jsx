@@ -490,6 +490,7 @@ const OrderDetail = ({ orderId, onBack, onCancel, isCancelling, cancelError }) =
       )
     : Number(order.returnInfo?.refundAmount) || 0;
   const activeItems = Array.isArray(order.items) ? order.items : [];
+  const removedArchive = Array.isArray(order.removedItemsArchive) ? order.removedItemsArchive : [];
   const showItemsAsCancelled =
     orderStatusLower === "cancelled" &&
     (Boolean(order.paymentInfo?.itemsUnavailableCancel) ||
@@ -635,10 +636,10 @@ const OrderDetail = ({ orderId, onBack, onCancel, isCancelling, cancelError }) =
       {/* Items */}
       <div className="bg-white rounded-[32px] p-6">
         <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4">
-          Items ({order.items?.length})
+          Items ({activeItems.length + removedArchive.length})
         </h3>
         <div className="space-y-4">
-          {order.items?.map((item, i) => {
+          {activeItems.map((item, i) => {
             const image = item.productId?.images?.[0]?.url || item.thumbnailUrl || null;
             const name = item.productId?.name || item.productId?.title || "Product";
             const price = item.priceSnapshot?.sale ?? item.priceSnapshot?.base;
@@ -664,7 +665,7 @@ const OrderDetail = ({ orderId, onBack, onCancel, isCancelling, cancelError }) =
 
             return (
               <div
-                key={i}
+                key={`active-${i}`}
                 className={`flex flex-col gap-2 ${isUnavailable ? "opacity-80" : ""}`}
               >
                 <div className="flex items-center gap-4">
@@ -745,6 +746,58 @@ const OrderDetail = ({ orderId, onBack, onCancel, isCancelling, cancelError }) =
               </div>
             );
           })}
+
+          {removedArchive.map((item, i) => {
+            const name = item?.productName || "Product";
+            const price = item?.priceSnapshot?.sale ?? item?.priceSnapshot?.base ?? null;
+            const qty = Number(item?.quantity) || 0;
+            const lineTotal =
+              item?.lineTotal != null
+                ? Number(item.lineTotal)
+                : Number(item?.priceSnapshot?.total) ||
+                  (Number(price) || 0) * qty;
+            const badge =
+              item?.reason === "qty_reduced"
+                ? "Qty reduced"
+                : item?.reason === "order_cancelled_empty"
+                  ? "Removed — order cancelled"
+                  : "Removed — unavailable";
+
+            return (
+              <div
+                key={`removed-${i}`}
+                className="flex items-center gap-4 opacity-80"
+              >
+                <div className="w-14 h-14 bg-gray-100 rounded-2xl overflow-hidden flex-shrink-0 flex items-center justify-center">
+                  <Package size={18} className="text-gray-300" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-black text-gray-500 line-through break-words leading-snug">
+                      {name}
+                    </p>
+                    <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-100">
+                      {badge}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 font-medium mt-0.5">
+                    Qty: {qty}
+                    {price != null ? ` × ${fmt(price)}` : ""}
+                    {item?.sku ? ` · SKU ${item.sku}` : ""}
+                  </p>
+                </div>
+                <p className="text-sm font-black text-gray-400 line-through shrink-0 text-right">
+                  {fmt(lineTotal)}
+                </p>
+              </div>
+            );
+          })}
+
+          {activeItems.length === 0 && removedArchive.length === 0 && (
+            <p className="text-sm text-gray-400 font-medium">
+              No item details available for this order.
+            </p>
+          )}
         </div>
       </div>
 

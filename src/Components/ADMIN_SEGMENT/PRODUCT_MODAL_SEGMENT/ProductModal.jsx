@@ -1,6 +1,6 @@
 // PRODUCT_MODAL_SEGMENT/ProductModal.jsx
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import ProductFormBody from "../Shared_components/ProductFormBody";
 import VariantModal, { defaultVariant } from "../Shared_components/VariantModal";
@@ -9,7 +9,15 @@ import CategoryModal from "../Shared_components/CategoryModal";
 import BrandModal from "../Shared_components/BrandModal";
 import AttributeModal from "../Shared_components/AttributeModal";
 import CustomMessageModal from "../Shared_components/CustomMessageModal";
-import { createProduct, resetCreateSuccess } from "../ADMIN_REDUX_MANAGEMENT/adminProductCreateSlice";
+import {
+  createProduct,
+  resetCreateSuccess,
+  resetCreateError,
+} from "../ADMIN_REDUX_MANAGEMENT/adminProductCreateSlice";
+import {
+  validateCreateProductForm,
+  scrollToProductShippingSection,
+} from "../../../utils/validateProductCreateForm";
 
 const formatIndianRupee = (amount) =>
   new Intl.NumberFormat("en-IN", {
@@ -22,56 +30,10 @@ const getDiscountPercentage = (base, sale) => {
   return Math.round(((Number(base) - Number(sale)) / Number(base)) * 100);
 };
 
-/** BASE left of hyphen preserved (leading zeros); only suffix digits normalized. */
-const SUFFIXED_PRODUCT_CODE_REGEX = /^([A-Z0-9]+)-(\d+)$/;
-
-const validateProductCodeSeries = (rawCodes, contextLabel = "variants") => {
-  const normalized = (rawCodes || []).map((c) => String(c || "").trim().toUpperCase()).filter(Boolean);
-  if (!normalized.length) {
-    throw new Error(`At least one ProductCode is required for ${contextLabel}`);
-  }
-
-  const parsed = normalized.map((code, idx) => {
-    const match = code.match(SUFFIXED_PRODUCT_CODE_REGEX);
-    if (!match) {
-      throw new Error(
-        `${contextLabel}[${idx + 1}] ProductCode must be BASE-N (e.g., 3897-1 or 3897-01)`
-      );
-    }
-    const seq = Number(match[2]);
-    if (!Number.isInteger(seq) || seq < 1) {
-      throw new Error(`${contextLabel}[${idx + 1}] ProductCode suffix must be a whole number ≥ 1`);
-    }
-    const canonical = `${match[1]}-${seq}`;
-    return { code: canonical, base: match[1], sequence: seq };
-  });
-
-  const base = parsed[0].base;
-  const seenCodes = new Set();
-  const seenSeq = new Set();
-
-  for (const entry of parsed) {
-    if (entry.base !== base) {
-      throw new Error(`All ProductCodes must share same base. Expected ${base}-N, got ${entry.code}`);
-    }
-    if (seenCodes.has(entry.code)) {
-      throw new Error(`Duplicate ProductCode found: ${entry.code}`);
-    }
-    seenCodes.add(entry.code);
-    seenSeq.add(entry.sequence);
-  }
-
-  for (let expected = 1; expected <= parsed.length; expected++) {
-    if (!seenSeq.has(expected)) {
-      throw new Error(`ProductCode sequence must be continuous: missing ${base}-${expected}`);
-    }
-  }
-};
-
 const emptyForm = () => ({
   name: "", title: "", description: "", brand: "Generic", category: "",
   ProductCode: "", price: { base: "", sale: "" },
-  inventory: { quantity: 0, lowStockThreshold: 5, trackInventory: true },
+  inventory: { quantity: "", lowStockThreshold: "", trackInventory: true },
   images: [], variants: [], attributes: [],
   hsnCode: "",
   taxRate: "",
@@ -80,9 +42,9 @@ const emptyForm = () => ({
   wholesale: false,
   wholesaleBase: "",
   wholesaleSale: "",
-  minimumOrderQuantity: 1,
-  soldInfo: { enabled: false, count: 0 },
-  fomo: { enabled: false, type: "viewing_now", viewingNow: 0, productLeft: 0, customMessage: "" },
+  minimumOrderQuantity: "",
+  soldInfo: { enabled: false, count: "" },
+  fomo: { enabled: false, type: "viewing_now", viewingNow: "", productLeft: "", customMessage: "" },
   isFeatured: false, status: "draft",
 });
 
@@ -100,10 +62,26 @@ const ProductModal = ({ onClose, brands, setBrands }) => {
   const [showAttributeModal, setShowAttributeModal] = useState(false);
   const [showCustomMessageModal, setShowCustomMessageModal] = useState(false);
   const [showVariantModal, setShowVariantModal] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+  const footerErrorRef = useRef(null);
+
+  const scrollToFooterError = useCallback(() => {
+    try {
+      footerErrorRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   useEffect(() => {
-    if (createSuccess) { dispatch(resetCreateSuccess()); setFormData(emptyForm); onClose(); }
+    if (createSuccess) { dispatch(resetCreateSuccess()); setFormData(emptyForm); setSubmitError(null); onClose(); }
   }, [createSuccess, dispatch, onClose]);
+
+  useEffect(() => {
+    if (createError) scrollToFooterError();
+  }, [createError, scrollToFooterError]);
+
+  useEffect(() => () => { dispatch(resetCreateError()); }, [dispatch]);
 
   const openAddVariant = () => {
     setVariantForm(defaultVariant);
@@ -155,50 +133,21 @@ const ProductModal = ({ onClose, brands, setBrands }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!formData.name.trim()) { alert("Product name is required"); return; }
-    if (!formData.title.trim()) { alert("Product title is required"); return; }
-    if (!formData.category) { alert("Please select a category"); return; }
-    const bc0 = String(formData.ProductCode ?? "").trim();
-    if (!bc0) { alert("Main ProductCode is required"); return; }
-    {
-      const m0 = bc0.toUpperCase().match(SUFFIXED_PRODUCT_CODE_REGEX);
-      const s0 = m0 ? Number(m0[2]) : NaN;
-      if (!m0 || !Number.isInteger(s0) || s0 < 1) {
-        alert("Main ProductCode must be BASE-N (e.g., 3897-1 or 3897-01)");
-        return;
-      }
-    }
-    if (!formData.price?.base || isNaN(Number(formData.price.base))) {
-      alert("Main variant base price is required"); return;
-    }
+    setSubmitError(null);
+    dispatch(resetCreateError());
 
-    for (let i = 0; i < formData.variants.length; i++) {
-      const bc = String(formData.variants[i].ProductCode ?? "").trim();
-      if (!bc) { alert(`Variant ${i + 1}: ProductCode is required`); return; }
-      {
-        const mv = bc.toUpperCase().match(SUFFIXED_PRODUCT_CODE_REGEX);
-        const sv = mv ? Number(mv[2]) : NaN;
-        if (!mv || !Number.isInteger(sv) || sv < 1) {
-          alert(`Variant ${i + 1}: ProductCode must be BASE-N (e.g., 3897-1 or 3897-01)`);
-          return;
-        }
-      }
-      if (!formData.variants[i].price?.base || isNaN(Number(formData.variants[i].price.base))) {
-        alert(`Variant ${i + 1}: base price is required`); return;
-      }
-    }
-    const allBarcodes = [bc0, ...formData.variants.map((v) => String(v.ProductCode).trim())];
-    if (new Set(allBarcodes).size !== allBarcodes.length) {
-      alert("Duplicate barcodes found — each variant must have a unique ProductCode"); return;
-    }
-    try {
-      validateProductCodeSeries(allBarcodes, "create product variants");
-    } catch (seriesError) {
-      alert(seriesError.message);
+    const validation = validateCreateProductForm(formData);
+    if (!validation.valid) {
+      setSubmitError(validation.message || "Please fix the errors below.");
+      if (validation.focusSection === "shipping") scrollToProductShippingSection();
+      scrollToFooterError();
       return;
     }
+
     dispatch(createProduct(formData));
   };
+
+  const displayError = submitError || createError;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center p-4 z-50 overflow-y-auto">
@@ -214,12 +163,6 @@ const ProductModal = ({ onClose, brands, setBrands }) => {
             <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
-
-        {createError && (
-          <div className="mx-6 mt-4 p-4 bg-red-50 border border-red-200 rounded-xl">
-            <p className="text-red-700 text-sm font-medium">❌ {createError}</p>
-          </div>
-        )}
 
         <form onSubmit={handleSubmit} className="p-6">
           <ProductFormBody
@@ -239,7 +182,18 @@ const ProductModal = ({ onClose, brands, setBrands }) => {
             formatIndianRupee={formatIndianRupee}
             getDiscountPercentage={getDiscountPercentage}
           />
-          <div className="flex gap-3 mt-6">
+
+          {displayError && (
+            <div
+              ref={footerErrorRef}
+              className="mt-6 p-4 bg-red-50 border border-red-200 rounded-xl"
+              role="alert"
+            >
+              <p className="text-red-700 text-sm font-medium">❌ {displayError}</p>
+            </div>
+          )}
+
+          <div className="flex gap-3 mt-4">
             <button type="button" onClick={onClose} disabled={createLoading} className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 disabled:opacity-60">Cancel</button>
             <button type="submit" disabled={createLoading} className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-lg hover:from-blue-700 hover:to-indigo-700 disabled:opacity-60 flex items-center justify-center gap-2">
               {createLoading ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Creating…</> : "Create Product"}

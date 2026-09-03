@@ -72,7 +72,7 @@ export const adminOrdersApi = createApi({
     }),
 
     /**
-     * Background auto-sync: Shiprocket → DB for stale orders in the selected date range.
+     * Background auto-sync: Shiprocket + Shipmozo forward status → DB for stale orders in date range.
      * POST /api/admin/orders/auto-sync-statuses
      */
     adminAutoSyncOrderStatuses: builder.mutation({

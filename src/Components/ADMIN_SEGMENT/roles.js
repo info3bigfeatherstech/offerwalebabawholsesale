@@ -11,6 +11,7 @@ export const ROLES = {
   PRODUCT_MANAGER:    "product_manager",
   ORDER_MANAGER:      "order_manager",
   MARKETING_MANAGER:  "marketing_manager",
+  INVENTORY_MANAGER:  "inventory_manager",
   // User: "user",
 };
 
@@ -19,6 +20,7 @@ export const ROLE_PERMISSIONS = {
   [ROLES.PRODUCT_MANAGER]:   ["products", "archived"],
   [ROLES.ORDER_MANAGER]:     ["orders", "returns_refunds", "rto", "settings"],
   [ROLES.MARKETING_MANAGER]: ["analytics"],
+  [ROLES.INVENTORY_MANAGER]: ["products"],
   // [ROLES.User]: ["user"],
 };
 
@@ -27,4 +29,13 @@ export const ROLE_LABELS = {
   [ROLES.PRODUCT_MANAGER]:   "Product Manager",
   [ROLES.ORDER_MANAGER]:     "Order Manager",
   [ROLES.MARKETING_MANAGER]: "Marketing Manager",
-};    
+  [ROLES.INVENTORY_MANAGER]: "Inventory Manager",
+};
+
+export function canManageProductCatalog(role) {
+  return role === ROLES.ADMIN || role === ROLES.PRODUCT_MANAGER;
+}
+
+export function isInventoryManagerRole(role) {
+  return role === ROLES.INVENTORY_MANAGER;
+}    

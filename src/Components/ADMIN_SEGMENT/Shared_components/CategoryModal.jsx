@@ -54,7 +54,7 @@ const ICONS = {
 // ─────────────────────────────────────────────────────────────
 //  IMAGE PREVIEW  (real extracted component — never remounts)
 // ─────────────────────────────────────────────────────────────
-const ImagePreview = memo(({ src, isNewFile, onClear, onReplace, onUploadClick }) => {
+const ImagePreview = memo(({ src, isNewFile, onClear, onReplace, onUploadClick, uploadHint }) => {
   const [loaded, setLoaded] = useState(false);
   const [error,  setError]  = useState(false);
 
@@ -62,6 +62,7 @@ const ImagePreview = memo(({ src, isNewFile, onClear, onReplace, onUploadClick }
   // Only remote http(s) URLs need the loading skeleton / onLoad wait.
   const isDataUri   = src?.startsWith("data:");
   const showVisible = loaded || isDataUri;   // show image immediately for local files
+  const hint = uploadHint || "PNG · JPG · WEBP · max 20 MB";
 
   useEffect(() => {
     // For data URIs we skip the skeleton entirely, so no need to reset.
@@ -83,7 +84,7 @@ const ImagePreview = memo(({ src, isNewFile, onClear, onReplace, onUploadClick }
       >
         <Icon d={ICONS.image} size={20} />
         <span className="text-xs font-medium">Click to upload image</span>
-        <span className="text-[10px] text-gray-300">PNG · JPG · WEBP · max 5 MB</span>
+        <span className="text-[10px] text-gray-300">{hint}</span>
       </button>
     );
   }
@@ -159,6 +160,8 @@ const CategoryRow = ({
   const isHidden = cat.status === "inactive";
 
   const catImgUrl =
+    cat?.cardImage?.url ||
+    cat?.cardImage?.secure_url ||
     cat?.image?.url ||
     cat?.image?.secure_url ||
     (typeof cat?.image === "string" && cat.image !== "" ? cat.image : null);
@@ -319,19 +322,26 @@ const CategoryModal = ({ onSelect, onClose }) => {
   const [editingCat,    setEditingCat]    = useState(null);
   const [formName,      setFormName]      = useState("");
   const [formDesc,      setFormDesc]      = useState("");
-  const [formImageFile, setFormImageFile] = useState(null);   // File | null
+  const [formImageFile, setFormImageFile] = useState(null);   // File | null — banner
   const [formImageSrc,  setFormImageSrc]  = useState("");     // data URI | server URL | ""
+  const [removeImage,   setRemoveImage]   = useState(false);
+  const [formCardImageFile, setFormCardImageFile] = useState(null);
+  const [formCardImageSrc,  setFormCardImageSrc]  = useState("");
+  const [removeCardImage,   setRemoveCardImage]   = useState(false);
   // Tracks the server URL of the category being edited so we can
   // restore it if the user cancels a new file selection.
   const existingImageUrlRef = useRef("");
+  const existingCardImageUrlRef = useRef("");
 
   // ── Delete confirm ───────────────────────────────────────────
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   const imageInputRef = useRef(null);
+  const cardImageInputRef = useRef(null);
   const formTopRef    = useRef(null);
 
   const isEditMode = editingCat !== null;
+  const MAX_CATEGORY_IMAGE_BYTES = 20 * 1024 * 1024;
 
   // ── Sync Redux → local list (only when drag is NOT active) ────
   useEffect(() => {
@@ -387,6 +397,25 @@ const CategoryModal = ({ onSelect, onClose }) => {
     return () => { cancelled = true; };
   }, [formImageFile]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    if (formCardImageFile) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (!cancelled) setFormCardImageSrc(e.target.result);
+      };
+      reader.onerror = () => {
+        if (!cancelled) setFormCardImageSrc(existingCardImageUrlRef.current);
+      };
+      reader.readAsDataURL(formCardImageFile);
+    } else {
+      setFormCardImageSrc(existingCardImageUrlRef.current);
+    }
+
+    return () => { cancelled = true; };
+  }, [formCardImageFile]);
+
   // ─────────────────────────────────────────────────────────────
   //  IMAGE URL HELPER
   // ─────────────────────────────────────────────────────────────
@@ -394,6 +423,13 @@ const CategoryModal = ({ onSelect, onClose }) => {
     cat?.image?.url ||
     cat?.image?.secure_url ||
     (typeof cat?.image === "string" && cat.image !== "" ? cat.image : null) ||
+    ""
+  , []);
+
+  const getExistingCardImageUrl = useCallback((cat) =>
+    cat?.cardImage?.url ||
+    cat?.cardImage?.secure_url ||
+    (typeof cat?.cardImage === "string" && cat.cardImage !== "" ? cat.cardImage : null) ||
     ""
   , []);
 
@@ -405,9 +441,13 @@ const CategoryModal = ({ onSelect, onClose }) => {
     setFormName("");
     setFormDesc("");
     setFormImageFile(null);
+    setRemoveImage(false);
+    setFormCardImageFile(null);
+    setRemoveCardImage(false);
     existingImageUrlRef.current = "";
-    // formImageSrc will auto-clear via the useEffect above
+    existingCardImageUrlRef.current = "";
     if (imageInputRef.current) imageInputRef.current.value = "";
+    if (cardImageInputRef.current) cardImageInputRef.current.value = "";
   }, []);
 
   const openEdit = useCallback((cat) => {
@@ -415,35 +455,82 @@ const CategoryModal = ({ onSelect, onClose }) => {
     setFormName(cat.name || "");
     setFormDesc(cat.description || "");
     setFormImageFile(null);
+    setFormCardImageFile(null);
+    setRemoveImage(false);
+    setRemoveCardImage(false);
     const existingUrl = getExistingImageUrl(cat);
+    const existingCardUrl = getExistingCardImageUrl(cat);
     existingImageUrlRef.current = existingUrl;
+    existingCardImageUrlRef.current = existingCardUrl;
     setFormImageSrc(existingUrl);
+    setFormCardImageSrc(existingCardUrl);
     if (imageInputRef.current) imageInputRef.current.value = "";
+    if (cardImageInputRef.current) cardImageInputRef.current.value = "";
     setTimeout(() => {
       formTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 50);
-  }, [getExistingImageUrl]);
+  }, [getExistingImageUrl, getExistingCardImageUrl]);
+
+  const validateImageFile = useCallback((file) => {
+    if (!file) return false;
+    if (!file.type.startsWith("image/")) {
+      alert("Please select a valid image (PNG, JPG, WEBP, etc.).");
+      return false;
+    }
+    if (file.size > MAX_CATEGORY_IMAGE_BYTES) {
+      alert("Image must be under 20 MB.");
+      return false;
+    }
+    return true;
+  }, []);
 
   const handleImageChange = useCallback((e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      alert("Please select a valid image (PNG, JPG, WEBP, etc.).");
+    if (!validateImageFile(file)) {
+      e.target.value = "";
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      alert("Image must be under 5 MB.");
-      return;
-    }
-    // Setting formImageFile triggers the useEffect which generates the preview
+    setRemoveImage(false);
     setFormImageFile(file);
-  }, []);
+  }, [validateImageFile]);
+
+  const handleCardImageChange = useCallback((e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!validateImageFile(file)) {
+      e.target.value = "";
+      return;
+    }
+    setRemoveCardImage(false);
+    setFormCardImageFile(file);
+  }, [validateImageFile]);
 
   const clearImage = useCallback(() => {
-    setFormImageFile(null);
+    if (formImageFile) {
+      setFormImageFile(null);
+      if (imageInputRef.current) imageInputRef.current.value = "";
+      setFormImageSrc(existingImageUrlRef.current);
+      return;
+    }
+    existingImageUrlRef.current = "";
+    setFormImageSrc("");
+    setRemoveImage(true);
     if (imageInputRef.current) imageInputRef.current.value = "";
-    // useEffect will restore existingImageUrlRef.current automatically
-  }, []);
+  }, [formImageFile]);
+
+  const clearCardImage = useCallback(() => {
+    if (formCardImageFile) {
+      setFormCardImageFile(null);
+      if (cardImageInputRef.current) cardImageInputRef.current.value = "";
+      setFormCardImageSrc(existingCardImageUrlRef.current);
+      return;
+    }
+    existingCardImageUrlRef.current = "";
+    setFormCardImageSrc("");
+    setRemoveCardImage(true);
+    if (cardImageInputRef.current) cardImageInputRef.current.value = "";
+  }, [formCardImageFile]);
 
   // ─────────────────────────────────────────────────────────────
   //  CRUD
@@ -455,6 +542,7 @@ const CategoryModal = ({ onSelect, onClose }) => {
       name,
       description: formDesc.trim(),
       imageFile: formImageFile || undefined,
+      cardImageFile: formCardImageFile || undefined,
     }));
     if (createCategory.fulfilled.match(result)) {
       await dispatch(fetchCategories());
@@ -472,6 +560,9 @@ const CategoryModal = ({ onSelect, onClose }) => {
         name,
         description: formDesc.trim(),
         imageFile: formImageFile || undefined,
+        cardImageFile: formCardImageFile || undefined,
+        removeImage: !formImageFile && removeImage ? true : undefined,
+        removeCardImage: !formCardImageFile && removeCardImage ? true : undefined,
       },
     }));
     if (updateCategory.fulfilled.match(result)) {
@@ -644,17 +735,21 @@ const CategoryModal = ({ onSelect, onClose }) => {
               }}
             />
 
-            {/* Image */}
+            {/* Banner image — category page hero background */}
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1.5">
-                Category image
+                Banner image
               </label>
+              <p className="text-[10px] text-gray-400 mb-1.5">
+                Wide hero background on the category page. Compressed to WebP before upload.
+              </p>
               <ImagePreview
                 src={formImageSrc}
                 isNewFile={!!formImageFile}
                 onClear={clearImage}
                 onReplace={() => imageInputRef.current?.click()}
                 onUploadClick={() => imageInputRef.current?.click()}
+                uploadHint="PNG · JPG · WEBP · max 20 MB"
               />
               <input
                 ref={imageInputRef}
@@ -662,6 +757,31 @@ const CategoryModal = ({ onSelect, onClose }) => {
                 accept="image/*"
                 className="hidden"
                 onChange={handleImageChange}
+              />
+            </div>
+
+            {/* Card image — Top Categories tile */}
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                Card image
+              </label>
+              <p className="text-[10px] text-gray-400 mb-1.5">
+                Square tile for Top Categories on the home page. Replace deletes the old file from storage.
+              </p>
+              <ImagePreview
+                src={formCardImageSrc}
+                isNewFile={!!formCardImageFile}
+                onClear={clearCardImage}
+                onReplace={() => cardImageInputRef.current?.click()}
+                onUploadClick={() => cardImageInputRef.current?.click()}
+                uploadHint="PNG · JPG · WEBP · max 20 MB"
+              />
+              <input
+                ref={cardImageInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleCardImageChange}
               />
             </div>
 

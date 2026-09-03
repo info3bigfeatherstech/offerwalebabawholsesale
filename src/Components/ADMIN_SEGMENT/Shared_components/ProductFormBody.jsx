@@ -1,6 +1,7 @@
 // Shared_components/ProductFormBody.jsx
 
 import React, { useState } from "react";
+import { displayNumericInput, normalizeNumericTyping, selectAllOnFocus } from "../../../utils/numericFormInput";
 const TAX_RATE_OPTIONS = [
   { value: 0, label: "0% (Nil Rated)" },
   { value: 5, label: "5% (GST)" },
@@ -156,8 +157,8 @@ const ProductFormBody = ({
   const primaryBase = formData.price?.base ?? "";
   const primarySale = formData.price?.sale ?? "";
   const primaryTrack = formData.inventory?.trackInventory ?? true;
-  const primaryQty = formData.inventory?.quantity ?? 0;
-  const primaryLow = formData.inventory?.lowStockThreshold ?? 5;
+  const primaryQty = formData.inventory?.quantity ?? "";
+  const primaryLow = formData.inventory?.lowStockThreshold ?? "";
 
   const mainGalleryImage = galleryImages.find((img) => img.isMain) || galleryImages[0] || null;
 
@@ -266,7 +267,7 @@ const ProductFormBody = ({
                 </button>
               </div>
               {formData.soldInfo?.enabled && (
-                <input type="number" value={formData.soldInfo?.count ?? 0} onChange={(e) => setFormData((p) => ({ ...p, soldInfo: { ...p.soldInfo, count: parseInt(e.target.value) || 0 } }))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg" placeholder="Number sold" />
+                <input type="number" value={displayNumericInput(formData.soldInfo?.count)} onFocus={selectAllOnFocus} onChange={(e) => setFormData((p) => ({ ...p, soldInfo: { ...p.soldInfo, count: normalizeNumericTyping(e.target.value) } }))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg" placeholder="Number sold" />
               )}
             </div>
 
@@ -285,10 +286,10 @@ const ProductFormBody = ({
                     <option value="custom">Custom</option>
                   </select>
                   {formData.fomo.type === "viewing_now" && (
-                    <input type="number" value={formData.fomo.viewingNow ?? 0} onChange={(e) => setFormData((p) => ({ ...p, fomo: { ...p.fomo, viewingNow: parseInt(e.target.value) || 0 } }))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg" placeholder="Viewing now count" />
+                    <input type="number" value={displayNumericInput(formData.fomo.viewingNow)} onFocus={selectAllOnFocus} onChange={(e) => setFormData((p) => ({ ...p, fomo: { ...p.fomo, viewingNow: normalizeNumericTyping(e.target.value) } }))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg" placeholder="Viewing now count" />
                   )}
                   {formData.fomo.type === "product_left" && (
-                    <input type="number" value={formData.fomo.productLeft ?? 0} onChange={(e) => setFormData((p) => ({ ...p, fomo: { ...p.fomo, productLeft: parseInt(e.target.value) || 0 } }))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg" placeholder="Items left" />
+                    <input type="number" value={displayNumericInput(formData.fomo.productLeft)} onFocus={selectAllOnFocus} onChange={(e) => setFormData((p) => ({ ...p, fomo: { ...p.fomo, productLeft: normalizeNumericTyping(e.target.value) } }))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg" placeholder="Items left" />
                   )}
                   {formData.fomo.type === "custom" && (
                     <div className="flex gap-2">
@@ -380,7 +381,7 @@ const ProductFormBody = ({
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Minimum Order Quantity (MOQ)</label>
-                      <input type="number" min="1" value={primaryVariant.minimumOrderQuantity ?? 1} onChange={(e) => updateMainVariantField("minimumOrderQuantity", parseInt(e.target.value) || 1)} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg" />
+                      <input type="number" min="1" value={displayNumericInput(primaryVariant.minimumOrderQuantity)} onFocus={selectAllOnFocus} onChange={(e) => updateMainVariantField("minimumOrderQuantity", normalizeNumericTyping(e.target.value))} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg" placeholder="1" />
                     </div>
                     {isWholesaleMoqUnmet(primaryVariant) && (
                       <p className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1">
@@ -401,8 +402,8 @@ const ProductFormBody = ({
                 </div>
                 {primaryVariant.inventory?.trackInventory !== false && (
                   <div className="grid grid-cols-2 gap-3">
-                    <input type="number" value={primaryVariant.inventory?.quantity ?? 0} onChange={(e) => updateMainVariantInventory("quantity", parseInt(e.target.value) || 0)} className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg" placeholder="Quantity" />
-                    <input type="number" value={primaryVariant.inventory?.lowStockThreshold ?? 5} onChange={(e) => updateMainVariantInventory("lowStockThreshold", parseInt(e.target.value) || 5)} className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg" placeholder="Low stock alert" />
+                    <input type="number" value={displayNumericInput(primaryVariant.inventory?.quantity)} onFocus={selectAllOnFocus} onChange={(e) => updateMainVariantInventory("quantity", normalizeNumericTyping(e.target.value))} className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg" placeholder="Quantity" />
+                    <input type="number" value={displayNumericInput(primaryVariant.inventory?.lowStockThreshold)} onFocus={selectAllOnFocus} onChange={(e) => updateMainVariantInventory("lowStockThreshold", normalizeNumericTyping(e.target.value))} className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg" placeholder="Low stock alert (e.g. 5)" />
                   </div>
                 )}
               </div>
@@ -429,11 +430,11 @@ const ProductFormBody = ({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Base Price (₹) <span className="text-red-400">*</span></label>
-                  <input type="number" value={primaryBase} onChange={(e) => setFormData((p) => ({ ...p, price: { ...p.price, base: e.target.value } }))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500" placeholder="29999" />
+                  <input type="number" value={primaryBase} onFocus={selectAllOnFocus} onChange={(e) => setFormData((p) => ({ ...p, price: { ...p.price, base: e.target.value } }))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500" placeholder="29999" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Sale Price (₹)</label>
-                  <input type="number" value={primarySale} onChange={(e) => setFormData((p) => ({ ...p, price: { ...p.price, sale: e.target.value } }))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500" placeholder="19999" />
+                  <input type="number" value={primarySale} onFocus={selectAllOnFocus} onChange={(e) => setFormData((p) => ({ ...p, price: { ...p.price, sale: e.target.value } }))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500" placeholder="19999" />
                 </div>
               </div>
               {primaryBase && primarySale && (
@@ -471,7 +472,7 @@ const ProductFormBody = ({
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Minimum Order Quantity (MOQ) <span className="text-red-400">*</span></label>
-                      <input type="number" min="1" value={formData.minimumOrderQuantity || 1} onChange={(e) => setFormData((p) => ({ ...p, minimumOrderQuantity: parseInt(e.target.value) || 1 }))} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-400" placeholder="Minimum quantity for wholesale price" />
+                      <input type="number" min="1" value={displayNumericInput(formData.minimumOrderQuantity)} onFocus={selectAllOnFocus} onChange={(e) => setFormData((p) => ({ ...p, minimumOrderQuantity: normalizeNumericTyping(e.target.value) }))} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-400" placeholder="Minimum quantity for wholesale price" />
                     </div>
                   </div>
                 )}
@@ -488,11 +489,11 @@ const ProductFormBody = ({
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Quantity</label>
-                      <input type="number" value={primaryQty} onChange={(e) => setFormData((p) => ({ ...p, inventory: { ...p.inventory, quantity: parseInt(e.target.value) || 0 } }))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0" />
+                      <input type="number" value={displayNumericInput(primaryQty)} onFocus={selectAllOnFocus} onChange={(e) => setFormData((p) => ({ ...p, inventory: { ...p.inventory, quantity: normalizeNumericTyping(e.target.value) } }))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Stock quantity" />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Low Stock Alert</label>
-                      <input type="number" value={primaryLow} onChange={(e) => setFormData((p) => ({ ...p, inventory: { ...p.inventory, lowStockThreshold: parseInt(e.target.value) || 5 } }))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="5" />
+                      <input type="number" value={displayNumericInput(primaryLow)} onFocus={selectAllOnFocus} onChange={(e) => setFormData((p) => ({ ...p, inventory: { ...p.inventory, lowStockThreshold: normalizeNumericTyping(e.target.value) } }))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="5" />
                     </div>
                   </div>
                 )}
@@ -503,7 +504,7 @@ const ProductFormBody = ({
         )}
 
         {/* Shipping — primary variant (variants[0]) uses product-level fields only */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div id="product-shipping-section" className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="p-4 border-b border-gray-100 bg-gray-50">
             <h3 className="font-semibold text-gray-900">Shipping Details</h3>
             <p className="text-xs text-gray-500 mt-0.5">
@@ -539,13 +540,13 @@ const ProductFormBody = ({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Weight (kg)</label>
-              <input type="number" step="0.1" value={formData.shipping?.weight ?? ""} onChange={(e) => setFormData((p) => ({ ...p, shipping: { ...p.shipping, weight: parseFloat(e.target.value) || 0 } }))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500" placeholder="0.5" />
+              <input type="number" step="0.1" value={displayNumericInput(formData.shipping?.weight)} onFocus={selectAllOnFocus} onChange={(e) => setFormData((p) => ({ ...p, shipping: { ...p.shipping, weight: normalizeNumericTyping(e.target.value, { allowDecimals: true }) } }))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500" placeholder="0.5" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Dimensions (cm)</label>
               <div className="grid grid-cols-3 gap-2">
                 {["length", "width", "height"].map((dim) => (
-                  <input key={dim} type="number" value={formData.shipping?.dimensions?.[dim] ?? ""} onChange={(e) => setFormData((p) => ({ ...p, shipping: { ...p.shipping, dimensions: { ...p.shipping.dimensions, [dim]: parseFloat(e.target.value) || 0 } } }))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder={dim[0].toUpperCase() + dim.slice(1)} />
+                  <input key={dim} type="number" step="0.1" value={displayNumericInput(formData.shipping?.dimensions?.[dim])} onFocus={selectAllOnFocus} onChange={(e) => setFormData((p) => ({ ...p, shipping: { ...p.shipping, dimensions: { ...p.shipping.dimensions, [dim]: normalizeNumericTyping(e.target.value, { allowDecimals: true }) } } }))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder={dim[0].toUpperCase() + dim.slice(1)} />
                 ))}
               </div>
             </div>

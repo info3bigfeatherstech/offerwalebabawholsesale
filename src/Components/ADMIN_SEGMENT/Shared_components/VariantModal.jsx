@@ -3,16 +3,17 @@
 import React, { useState } from 'react';
 import VariantCatalogFieldsSection from './VariantCatalogFieldsSection';
 import { emptyVariantShippingForm } from '../../../utils/variantCatalogForm';
+import { displayNumericInput, normalizeNumericTyping, selectAllOnFocus } from '../../../utils/numericFormInput';
 
 export const defaultVariant = {
   attributes: [{ key: '', value: '' }],
   price: { base: '', sale: '', wholesaleBase: '', wholesaleSale: '' },
-  inventory: { quantity: 0, lowStockThreshold: 5, trackInventory: true },
+  inventory: { quantity: '', lowStockThreshold: '', trackInventory: true },
   images: [],
   isActive: true,
   ProductCode: '',
   wholesale: false,
-  minimumOrderQuantity: 1,
+  minimumOrderQuantity: '',
   channelVisibility: { ecomm: 'active', wholesale: 'draft' },
   title: '',
   description: '',
@@ -237,7 +238,7 @@ const VariantModal = ({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Base Price <span className="text-red-400">*</span></label>
-                <input type="number" value={variantForm.price.base} onChange={(e) => setVariantForm(prev => ({ ...prev, price: { ...prev.price, base: e.target.value } }))} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg" placeholder="89000" />
+                <input type="number" value={displayNumericInput(variantForm.price.base)} onFocus={selectAllOnFocus} onChange={(e) => setVariantForm(prev => ({ ...prev, price: { ...prev.price, base: e.target.value } }))} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg" placeholder="89000" />
               </div>
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Sale Price</label>
@@ -280,7 +281,7 @@ const VariantModal = ({
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Minimum Order Quantity (MOQ)</label>
-                  <input type="number" min="1" value={variantForm.minimumOrderQuantity || 1} onChange={(e) => setVariantForm(prev => ({ ...prev, minimumOrderQuantity: parseInt(e.target.value) || 1 }))} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg" />
+                  <input type="number" min="1" value={displayNumericInput(variantForm.minimumOrderQuantity)} onFocus={selectAllOnFocus} onChange={(e) => setVariantForm(prev => ({ ...prev, minimumOrderQuantity: normalizeNumericTyping(e.target.value) }))} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg" placeholder="1" />
                 </div>
                 {isWholesaleMoqUnmet() && (
                   <p className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1">
@@ -310,8 +311,8 @@ const VariantModal = ({
             </div>
             {variantForm.inventory.trackInventory && (
               <div className="grid grid-cols-2 gap-3">
-                <input type="number" value={variantForm.inventory.quantity} onChange={(e) => setVariantForm(prev => ({ ...prev, inventory: { ...prev.inventory, quantity: parseInt(e.target.value) || 0 } }))} className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg" placeholder="Quantity" />
-                <input type="number" value={variantForm.inventory.lowStockThreshold} onChange={(e) => setVariantForm(prev => ({ ...prev, inventory: { ...prev.inventory, lowStockThreshold: parseInt(e.target.value) || 5 } }))} className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg" placeholder="Low stock alert" />
+                <input type="number" value={displayNumericInput(variantForm.inventory.quantity)} onFocus={selectAllOnFocus} onChange={(e) => setVariantForm(prev => ({ ...prev, inventory: { ...prev.inventory, quantity: normalizeNumericTyping(e.target.value) } }))} className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg" placeholder="Quantity" />
+                <input type="number" value={displayNumericInput(variantForm.inventory.lowStockThreshold)} onFocus={selectAllOnFocus} onChange={(e) => setVariantForm(prev => ({ ...prev, inventory: { ...prev.inventory, lowStockThreshold: normalizeNumericTyping(e.target.value) } }))} className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg" placeholder="Low stock alert (e.g. 5)" />
               </div>
             )}
           </div>

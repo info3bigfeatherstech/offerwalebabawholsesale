@@ -1,4 +1,5 @@
 import React from "react";
+import { displayNumericInput, normalizeNumericTyping, selectAllOnFocus } from "../../../utils/numericFormInput";
 
 /**
  * Optional per-variant title, description, and shipping (falls back to product-level when empty).
@@ -59,8 +60,9 @@ const VariantCatalogFieldsSection = ({
             type="number"
             step="0.01"
             min="0"
-            value={shipping?.weight ?? ""}
-            onChange={(e) => onShippingChange({ ...shipping, weight: e.target.value })}
+            value={displayNumericInput(shipping?.weight)}
+            onFocus={selectAllOnFocus}
+            onChange={(e) => onShippingChange({ ...shipping, weight: normalizeNumericTyping(e.target.value, { allowDecimals: true }) })}
             className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
             placeholder="Weight (kg)"
           />
@@ -72,8 +74,9 @@ const VariantCatalogFieldsSection = ({
               type="number"
               step="0.1"
               min="0"
-              value={dims[dim] ?? ""}
-              onChange={(e) => setDim(dim, e.target.value)}
+              value={displayNumericInput(dims[dim])}
+              onFocus={selectAllOnFocus}
+              onChange={(e) => setDim(dim, normalizeNumericTyping(e.target.value, { allowDecimals: true }))}
               className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm capitalize"
               placeholder={dim}
             />
