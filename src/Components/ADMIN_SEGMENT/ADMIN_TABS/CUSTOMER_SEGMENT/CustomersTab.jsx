@@ -221,7 +221,7 @@ const CustomersTab = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <LeadsAutoPushToggle />
+          <LeadsAutoPushToggle showWishlist={false} />
           <div className="flex items-center gap-3 flex-wrap">
             <select 
               className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none"

@@ -4,8 +4,7 @@ import {
   useGetStaleWishlistsQuery, 
   useGetPopularWishlistProductsQuery 
 } from '../../ADMIN_REDUX_MANAGEMENT/userAnalyticsApi';
-import CartReminderEmailModal from './CartReminderEmailModal';
-import CartReminderPushModal from './CartReminderPushModal';
+import WishlistReminderPushModal from './WishlistReminderPushModal';
 import BulkActionsMenu from './BulkActionsMenu';
 import LeadsAutoPushToggle from './LeadsAutoPushToggle';
 import { DateTimeCell } from './adminDateTime';
@@ -16,16 +15,14 @@ const WishlistsTab = () => {
   const [days, setDays] = useState(7);
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [selectedUserMeta, setSelectedUserMeta] = useState({});
-  const [cartReminderOpen, setCartReminderOpen] = useState(false);
-  const [cartReminderRecipients, setCartReminderRecipients] = useState([]);
-  const [cartPushOpen, setCartPushOpen] = useState(false);
-  const [cartPushRecipients, setCartPushRecipients] = useState([]);
+  const [wishlistPushOpen, setWishlistPushOpen] = useState(false);
+  const [wishlistPushRecipients, setWishlistPushRecipients] = useState([]);
 
   const snapshotFromWishlist = useCallback((wishlist) => ({
     _id: wishlist.user?._id,
     name: wishlist.user?.name || 'Customer',
     email: wishlist.user?.email || '—',
-    cartItemsCount: 0,
+    itemCount: wishlist.itemCount || wishlist.products?.length || 0,
   }), []);
 
   const allWishlists = useGetAllWishlistsQuery({ page, limit: 10 });
@@ -90,40 +87,24 @@ const WishlistsTab = () => {
       if (selectedUserMeta[id]) return selectedUserMeta[id];
       const fromPage = data.find((w) => w.user?._id === id);
       if (fromPage) return snapshotFromWishlist(fromPage);
-      return { _id: id, name: 'Customer', email: '—', cartItemsCount: 0 };
+      return { _id: id, name: 'Customer', email: '—', itemCount: 0 };
     });
   }, [selectedUserIds, selectedUserMeta, data, snapshotFromWishlist]);
 
-  const openCartReminderModal = useCallback((recipientList) => {
+  const openWishlistPushModal = useCallback((recipientList) => {
     if (!recipientList?.length) return;
-    setCartReminderRecipients(recipientList);
-    setCartReminderOpen(true);
+    setWishlistPushRecipients(recipientList);
+    setWishlistPushOpen(true);
   }, []);
 
-  const closeCartReminderModal = useCallback(() => {
-    setCartReminderOpen(false);
-    setCartReminderRecipients([]);
+  const closeWishlistPushModal = useCallback(() => {
+    setWishlistPushOpen(false);
+    setWishlistPushRecipients([]);
   }, []);
 
-  const openCartPushModal = useCallback((recipientList) => {
-    if (!recipientList?.length) return;
-    setCartPushRecipients(recipientList);
-    setCartPushOpen(true);
-  }, []);
-
-  const closeCartPushModal = useCallback(() => {
-    setCartPushOpen(false);
-    setCartPushRecipients([]);
-  }, []);
-
-  const handleBulkCartEmail = () => {
+  const handleBulkWishlistPush = () => {
     if (!selectedUserIds.length) return;
-    openCartReminderModal(buildRecipientsFromSelection());
-  };
-
-  const handleBulkCartPush = () => {
-    if (!selectedUserIds.length) return;
-    openCartPushModal(buildRecipientsFromSelection());
+    openWishlistPushModal(buildRecipientsFromSelection());
   };
 
   const selectableIds = data.map((w) => w.user?._id).filter(Boolean);
@@ -217,12 +198,12 @@ const WishlistsTab = () => {
       {activeSubTab !== 'popular' && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-3">
-            <LeadsAutoPushToggle />
+            <LeadsAutoPushToggle showCart={false} showWishlist showNewProducts />
             {selectedUserIds.length > 0 && (
               <BulkActionsMenu
                 count={selectedUserIds.length}
-                onCartEmail={handleBulkCartEmail}
-                onCartPush={handleBulkCartPush}
+                variant="wishlist"
+                onWishlistPush={handleBulkWishlistPush}
               />
             )}
           </div>
@@ -429,16 +410,10 @@ const WishlistsTab = () => {
         </div>
       )}
 
-      <CartReminderEmailModal
-        isOpen={cartReminderOpen}
-        onClose={closeCartReminderModal}
-        recipients={cartReminderRecipients}
-      />
-
-      <CartReminderPushModal
-        isOpen={cartPushOpen}
-        onClose={closeCartPushModal}
-        recipients={cartPushRecipients}
+      <WishlistReminderPushModal
+        isOpen={wishlistPushOpen}
+        onClose={closeWishlistPushModal}
+        recipients={wishlistPushRecipients}
       />
 
       {/* Empty State */}

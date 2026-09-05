@@ -1,6 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-const BulkActionsMenu = ({ count, onCartEmail, onCartPush, align = 'right' }) => {
+const BulkActionsMenu = ({
+  count,
+  onCartEmail,
+  onCartPush,
+  onWishlistPush,
+  variant = 'cart',
+  align = 'right',
+}) => {
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -35,29 +42,45 @@ const BulkActionsMenu = ({ count, onCartEmail, onCartPush, align = 'right' }) =>
         </svg>
       </button>
       {open && (
-        <div className={`absolute ${positionClass} mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1`}>
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              onCartEmail?.();
-            }}
-            className="w-full text-left px-4 py-2.5 text-sm text-gray-800 hover:bg-indigo-50 flex items-center gap-2"
-          >
-            <span aria-hidden>✉️</span>
-            Send cart reminder (Email)
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              onCartPush?.();
-            }}
-            className="w-full text-left px-4 py-2.5 text-sm text-gray-800 hover:bg-violet-50 flex items-center gap-2"
-          >
-            <span aria-hidden>🔔</span>
-            Send cart reminder (Notification)
-          </button>
+        <div className={`absolute ${positionClass} mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1`}>
+          {variant === 'wishlist' ? (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onWishlistPush?.();
+              }}
+              className="w-full text-left px-4 py-2.5 text-sm text-gray-800 hover:bg-pink-50 flex items-center gap-2"
+            >
+              <span aria-hidden>🔔</span>
+              Send wishlist reminder (Notification)
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onCartEmail?.();
+                }}
+                className="w-full text-left px-4 py-2.5 text-sm text-gray-800 hover:bg-indigo-50 flex items-center gap-2"
+              >
+                <span aria-hidden>✉️</span>
+                Send cart reminder (Email)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onCartPush?.();
+                }}
+                className="w-full text-left px-4 py-2.5 text-sm text-gray-800 hover:bg-violet-50 flex items-center gap-2"
+              >
+                <span aria-hidden>🔔</span>
+                Send cart reminder (Notification)
+              </button>
+            </>
+          )}
           <button
             type="button"
             disabled

@@ -1,8 +1,16 @@
 import axiosInstance from '../SERVICES/Wholesaleaxios';
 
-const PROMPT_DISMISS_KEY = 'owb_wholesale_push_prompt_dismissed_at';
-const PROMPT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+const PROMPT_DISMISS_SESSION_KEY = 'owb_wholesale_push_prompt_dismissed_session';
+const LEGACY_PROMPT_DISMISS_KEY = 'owb_wholesale_push_prompt_dismissed_at';
+/** Guest soft-prompt cadence (rolling window). */
+const PROMPT_CADENCE_KEY = 'owb_wholesale_push_prompt_cadence';
 const SW_READY_TIMEOUT_MS = 12000;
+
+/** Keep in sync with backend pushSoftPrompt.service.js */
+const WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_SHOWS_IN_WINDOW = 4;
+const MIN_GAP_MS = 42 * 60 * 60 * 1000;
+const MAX_STORED_IMPRESSIONS = 12;
 
 function waitForServiceWorkerReady(timeoutMs = SW_READY_TIMEOUT_MS) {
   return Promise.race([
@@ -49,16 +57,187 @@ export async function getPushStatus() {
   return res.data;
 }
 
-export function shouldShowPushPrompt() {
+function clearLegacyPromptKeys() {
+  try {
+    localStorage.removeItem(LEGACY_PROMPT_DISMISS_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function isSessionDismissed() {
+  try {
+    return sessionStorage.getItem(PROMPT_DISMISS_SESSION_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function readGuestCadence() {
+  try {
+    const raw = localStorage.getItem(PROMPT_CADENCE_KEY);
+    if (!raw) return { shownAt: [] };
+    const parsed = JSON.parse(raw);
+    const shownAt = Array.isArray(parsed?.shownAt)
+      ? parsed.shownAt.map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0)
+      : [];
+    return { shownAt };
+  } catch {
+    return { shownAt: [] };
+  }
+}
+
+function writeGuestCadence(shownAt) {
+  try {
+    const pruned = pruneTimestamps(shownAt);
+    localStorage.setItem(
+      PROMPT_CADENCE_KEY,
+      JSON.stringify({ v: 1, shownAt: pruned })
+    );
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
+function pruneTimestamps(timestamps, now = Date.now()) {
+  const cutoff = now - WINDOW_MS;
+  return (Array.isArray(timestamps) ? timestamps : [])
+    .map((n) => Number(n))
+    .filter((n) => Number.isFinite(n) && n >= cutoff)
+    .sort((a, b) => a - b)
+    .slice(-MAX_STORED_IMPRESSIONS);
+}
+
+function evaluateLocalCadence(shownAt, now = Date.now()) {
+  const recent = pruneTimestamps(shownAt, now);
+  const count = recent.length;
+  const lastMs = count > 0 ? recent[count - 1] : null;
+
+  if (count >= MAX_SHOWS_IN_WINDOW) {
+    return { allowed: false, reason: 'max_shows_in_window', count };
+  }
+  if (lastMs != null && now - lastMs < MIN_GAP_MS) {
+    return { allowed: false, reason: 'min_gap', count };
+  }
+  return { allowed: true, reason: 'ok', count };
+}
+
+function permissionAllowsSoftPrompt() {
   if (!isPushSupported()) return false;
-  if (Notification.permission !== 'default') return false;
-  const dismissedAt = Number(localStorage.getItem(PROMPT_DISMISS_KEY) || 0);
-  if (!dismissedAt) return true;
-  return Date.now() - dismissedAt > PROMPT_COOLDOWN_MS;
+  if (typeof Notification === 'undefined') return false;
+  if (Notification.permission === 'granted') return false;
+  return Notification.permission === 'default' || Notification.permission === 'denied';
+}
+
+/**
+ * Sync guest check (localStorage cadence + this-session dismiss).
+ * Prefer evaluatePushPromptEligibility() when login state is known.
+ */
+export function shouldShowPushPrompt() {
+  clearLegacyPromptKeys();
+  if (!permissionAllowsSoftPrompt()) return false;
+  if (isSessionDismissed()) return false;
+  return evaluateLocalCadence(readGuestCadence().shownAt).allowed;
+}
+
+/**
+ * Logged-in → server cadence (localStorage fallback on API failure).
+ * Guest → localStorage only.
+ */
+export async function evaluatePushPromptEligibility({ isLoggedIn = false } = {}) {
+  clearLegacyPromptKeys();
+  try {
+    if (!permissionAllowsSoftPrompt()) {
+      return { allowed: false, reason: 'permission' };
+    }
+    if (isSessionDismissed()) {
+      return { allowed: false, reason: 'session_dismissed' };
+    }
+
+    if (!isLoggedIn) {
+      const local = evaluateLocalCadence(readGuestCadence().shownAt);
+      return { allowed: local.allowed, reason: local.reason, source: 'local' };
+    }
+
+    try {
+      const res = await axiosInstance.get('/push/prompt-eligibility');
+      if (res?.data?.success === true && typeof res.data.allowed === 'boolean') {
+        const local = evaluateLocalCadence(readGuestCadence().shownAt);
+        // Stricter of server + local: survives LS wipe (server) and failed impression POST (local).
+        const allowed = Boolean(res.data.allowed) && local.allowed;
+        return {
+          allowed,
+          reason: !res.data.allowed
+            ? res.data.reason || 'server_blocked'
+            : !local.allowed
+              ? local.reason
+              : 'ok',
+          source: 'server',
+        };
+      }
+    } catch {
+      // fall through to localStorage
+    }
+
+    const fallback = evaluateLocalCadence(readGuestCadence().shownAt);
+    return {
+      allowed: fallback.allowed,
+      reason: fallback.reason,
+      source: 'local_fallback',
+    };
+  } catch {
+    return { allowed: false, reason: 'error' };
+  }
+}
+
+/**
+ * Record one soft-prompt show. Safe to call multiple times (min-gap / session).
+ */
+export async function recordPushPromptImpression({ isLoggedIn = false } = {}) {
+  const now = Date.now();
+
+  try {
+    const { shownAt } = readGuestCadence();
+    const cadence = evaluateLocalCadence(shownAt, now);
+    if (cadence.allowed) {
+      writeGuestCadence([...shownAt, now]);
+    }
+  } catch {
+    // ignore
+  }
+
+  if (!isLoggedIn) {
+    return { recorded: true, source: 'local' };
+  }
+
+  try {
+    const res = await axiosInstance.post('/push/prompt-impression');
+    return {
+      recorded: Boolean(res?.data?.recorded),
+      source: 'server',
+      reason: res?.data?.reason,
+    };
+  } catch {
+    return { recorded: false, source: 'server_failed' };
+  }
 }
 
 export function dismissPushPrompt() {
-  localStorage.setItem(PROMPT_DISMISS_KEY, String(Date.now()));
+  try {
+    sessionStorage.setItem(PROMPT_DISMISS_SESSION_KEY, '1');
+  } catch {
+    // ignore
+  }
+  try {
+    localStorage.removeItem(LEGACY_PROMPT_DISMISS_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+export function getNotificationPermission() {
+  if (typeof Notification === 'undefined') return 'unsupported';
+  return Notification.permission;
 }
 
 export async function subscribeToWebPush() {

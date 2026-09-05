@@ -84,6 +84,15 @@ export const userAnalyticsApi = createApi({
       }),
     }),
 
+    sendBulkWishlistReminderPush: builder.mutation({
+      query: (userIds) => ({
+        url: '/admin/analytics/users/bulk-wishlist-reminder-push',
+        method: 'POST',
+        data: { userIds },
+        timeout: 60_000,
+      }),
+    }),
+
     getLeadsPushSettings: builder.query({
       query: () => ({
         url: '/admin/analytics/push-settings',
@@ -193,6 +202,7 @@ export const {
   useGetUserByIdQuery,
   useSendBulkCartReminderEmailMutation,
   useSendBulkCartReminderPushMutation,
+  useSendBulkWishlistReminderPushMutation,
   useGetLeadsPushSettingsQuery,
   useUpdateLeadsPushSettingsMutation,
   useGetAllCartsQuery,

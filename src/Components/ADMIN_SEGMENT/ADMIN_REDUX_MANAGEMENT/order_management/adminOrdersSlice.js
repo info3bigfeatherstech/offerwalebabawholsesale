@@ -77,6 +77,20 @@ export function localDateStrToEndIso(dateStr) {
   return dt.toISOString();
 }
 
+/**
+ * Browser-local calendar day: midnight 00:00 → 23:59:59.999.
+ * Matches Orders table date labels — not server TZ / not hardcoded IST.
+ */
+export function localTodayRangeIso() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const d = now.getDate();
+  const from = new Date(y, m, d, 0, 0, 0, 0);
+  const to = new Date(y, m, d, 23, 59, 59, 999);
+  return { from: from.toISOString(), to: to.toISOString() };
+}
+
 /** True when admin applied Today / 7d / 30d / Custom (not default "All dates"). */
 export function isOrdersDateFilterActive(datePreset) {
   const p = String(datePreset || 'none').toLowerCase();
@@ -196,7 +210,7 @@ function buildDateQueryArgs(ui) {
     }
     return { rangePreset: 'all' };
   }
-  if (ui.datePreset === 'today') return { rangePreset: 'today' };
+  if (ui.datePreset === 'today') return localTodayRangeIso();
   if (ui.datePreset === 'last7') return { rangePreset: 'last7' };
   if (ui.datePreset === 'last30') return { rangePreset: 'last30' };
   return { rangePreset: 'all' };
@@ -335,7 +349,7 @@ function buildRtoDateQueryArgs(ui) {
     // Incomplete custom inputs → keep lifetime list (never silently shrink to 30d).
     return { rangePreset: 'all' };
   }
-  if (ui.datePreset === 'today') return { rangePreset: 'today' };
+  if (ui.datePreset === 'today') return localTodayRangeIso();
   if (ui.datePreset === 'last7') return { rangePreset: 'last7' };
   if (ui.datePreset === 'last30') return { rangePreset: 'last30' };
   return { rangePreset: 'all' };

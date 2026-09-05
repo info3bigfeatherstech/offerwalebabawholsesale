@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import { openModal } from './Components/REDUX_FEATURES/REDUX_SLICES/WHOLESALE/wholesalerSlice';
+import { isPwaInstalled } from './utils/pwaInstallPrompt';
+import { subscribeToWebPush } from './utils/pushNotifications';
 import Navbar from './Components/Common/Navbar';
 import Footer from './Components/Common/Footer';
 import Home from './Components/Website_Pages/Home';
@@ -31,6 +34,7 @@ import useWishlistInit from "./Components/HOOKS/useWishlistInit";
 import useCartInit from "./Components/HOOKS/useCartInit";
 import usePushNotifications from "./Components/HOOKS/usePushNotifications";
 import PushNotificationPrompt from "./Components/Common/PushNotificationPrompt";
+import InstallAppPrompt from "./Components/Common/InstallAppPrompt";
 import ContactUs from './Components/HomeComponents/Contact';
 import UserDashboard from './User_Side_Web_Interface/User_Dash_Segment/UserDashboard';
 import Checkout from './User_Side_Web_Interface/CHECKOUT/Checkout';
@@ -182,23 +186,60 @@ function SessionHandler() {
   useCartInit();
 
   const { canPrompt: canShowPushPrompt } = usePushNotifications(
-    isAuthenticated && !isAdminRoute
+    isAuthenticated && !isAdminRoute,
+    isAuthenticated
   );
   const [pushPromptVisible, setPushPromptVisible] = useState(false);
+  const [installPromptOpen, setInstallPromptOpen] = useState(() => !isPwaInstalled());
 
   useEffect(() => {
-    if (isAuthenticated && !isAdminRoute && canShowPushPrompt) {
-      setPushPromptVisible(true);
-    } else {
+    if (isAdminRoute || !canShowPushPrompt || installPromptOpen) {
       setPushPromptVisible(false);
+      return undefined;
     }
-  }, [isAuthenticated, isAdminRoute, canShowPushPrompt]);
+    const delayMs = isPwaInstalled() ? 900 : 800;
+    const t = window.setTimeout(() => setPushPromptVisible(true), delayMs);
+    return () => window.clearTimeout(t);
+  }, [isAdminRoute, canShowPushPrompt, installPromptOpen]);
+
+  useEffect(() => {
+    if (!isAuthenticated || isAdminRoute) return undefined;
+    let pending = false;
+    try {
+      pending = sessionStorage.getItem('owb_push_subscribe_after_login') === '1';
+    } catch {
+      // ignore
+    }
+    if (!pending) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        sessionStorage.removeItem('owb_push_subscribe_after_login');
+        if (cancelled) return;
+        await subscribeToWebPush();
+        setPushPromptVisible(false);
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, isAdminRoute]);
 
   return (
-    <PushNotificationPrompt
-      visible={pushPromptVisible}
-      onDismiss={() => setPushPromptVisible(false)}
-    />
+    <>
+      <PushNotificationPrompt
+        visible={pushPromptVisible}
+        isLoggedIn={isAuthenticated}
+        onNeedLogin={() => dispatch(openModal('login'))}
+        onDismiss={() => setPushPromptVisible(false)}
+      />
+      <InstallAppPrompt
+        enabled={!isAdminRoute}
+        onVisibilityChange={setInstallPromptOpen}
+      />
+    </>
   );
 }
 
