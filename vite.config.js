@@ -23,9 +23,9 @@ export default defineConfig({
         'pwa-512x512.png',
       ],
       manifest: {
-        name: 'OfferWaleBaba Wholesale',
-        short_name: 'OWB Wholesale',
-        description: 'Wholesale',
+        name: 'Offer Wale Baba Wholesale',
+        short_name: 'Offer Wale Baba',
+        description: 'Wholesale deals on Offer Wale Baba',
         theme_color: '#000000',
         background_color: '#ffffff',
         display: 'standalone',

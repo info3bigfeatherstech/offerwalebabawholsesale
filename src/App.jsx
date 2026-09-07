@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-route
 import { useDispatch, useSelector } from 'react-redux';
 import { openModal, selectIsModalOpen } from './Components/REDUX_FEATURES/REDUX_SLICES/WHOLESALE/wholesalerSlice';
 import { isPwaInstalled } from './utils/pwaInstallPrompt';
-import { subscribeToWebPush } from './utils/pushNotifications';
+import { subscribeToWebPush, syncPwaInstallAttribution } from './utils/pushNotifications';
 import Navbar from './Components/Common/Navbar';
 import Footer from './Components/Common/Footer';
 import Home from './Components/Website_Pages/Home';
@@ -195,13 +195,13 @@ function SessionHandler() {
   const [pushPromptVisible, setPushPromptVisible] = useState(false);
   const [installPromptOpen, setInstallPromptOpen] = useState(() => !isPwaInstalled());
 
-  // Never stack push over login (auth modal was below push z-index).
+  // Install first → wait 1 min after install UI closes → then notifications. Never together.
   useEffect(() => {
     if (isAdminRoute || !canShowPushPrompt || installPromptOpen || isAuthOpen) {
       setPushPromptVisible(false);
       return undefined;
     }
-    const delayMs = isPwaInstalled() ? 900 : 800;
+    const delayMs = 60 * 1000;
     const t = window.setTimeout(() => setPushPromptVisible(true), delayMs);
     return () => window.clearTimeout(t);
   }, [isAdminRoute, canShowPushPrompt, installPromptOpen, isAuthOpen]);
@@ -224,6 +224,23 @@ function SessionHandler() {
         setPushPromptVisible(false);
       } catch {
         // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, isAdminRoute]);
+
+  // Attribute PWA install for logged-in users (standalone or just-installed this session).
+  useEffect(() => {
+    if (!isAuthenticated || isAdminRoute) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (cancelled) return;
+        await syncPwaInstallAttribution({ isLoggedIn: true });
+      } catch {
+        // never block app
       }
     })();
     return () => {

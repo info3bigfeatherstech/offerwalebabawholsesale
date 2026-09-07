@@ -37,7 +37,7 @@ const axiosBaseQuery = ({ baseUrl } = { baseUrl: '' }) =>
 export const userAnalyticsApi = createApi({
   reducerPath: 'userAnalyticsApi',
   baseQuery: axiosBaseQuery({ baseUrl: '' }),
-  tagTypes: ['Users', 'Carts', 'Wishlists', 'Dashboard', 'LeadsPushSettings'],
+  tagTypes: ['Users', 'Carts', 'Wishlists', 'Dashboard', 'LeadsPushSettings', 'Engagement'],
   keepUnusedDataFor: 60, // Cache for 60 seconds
   endpoints: (builder) => ({
 
@@ -108,6 +108,34 @@ export const userAnalyticsApi = createApi({
         data: body,
       }),
       invalidatesTags: ['LeadsPushSettings'],
+    }),
+
+    // ========== ENGAGEMENT (push + PWA) ==========
+
+    getEngagementSummary: builder.query({
+      query: () => ({
+        url: '/admin/analytics/engagement/summary',
+        method: 'GET',
+      }),
+      providesTags: [{ type: 'Engagement', id: 'SUMMARY' }],
+    }),
+
+    getPushSubscribers: builder.query({
+      query: ({ page = 1, limit = 20, search = '' } = {}) => ({
+        url: '/admin/analytics/engagement/push-subscribers',
+        method: 'GET',
+        params: { page, limit, search },
+      }),
+      providesTags: [{ type: 'Engagement', id: 'PUSH_LIST' }],
+    }),
+
+    getPwaInstalls: builder.query({
+      query: ({ page = 1, limit = 20, search = '' } = {}) => ({
+        url: '/admin/analytics/engagement/pwa-installs',
+        method: 'GET',
+        params: { page, limit, search },
+      }),
+      providesTags: [{ type: 'Engagement', id: 'PWA_LIST' }],
     }),
 
     // ========== CART ENDPOINTS ==========
@@ -205,6 +233,9 @@ export const {
   useSendBulkWishlistReminderPushMutation,
   useGetLeadsPushSettingsQuery,
   useUpdateLeadsPushSettingsMutation,
+  useGetEngagementSummaryQuery,
+  useGetPushSubscribersQuery,
+  useGetPwaInstallsQuery,
   useGetAllCartsQuery,
   useGetAbandonedCartsQuery,
   useGetHighValueCartsQuery,

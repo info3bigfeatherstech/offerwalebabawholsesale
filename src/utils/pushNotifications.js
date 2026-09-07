@@ -1,16 +1,13 @@
-import axiosInstance from '../SERVICES/Wholesaleaxios';
+import axiosInstance, { WHOLESALE_USER_ACCESS_TOKEN_KEY } from '../SERVICES/Wholesaleaxios';
+import { isPwaInstalled } from './pwaInstallPrompt';
 
 const PROMPT_DISMISS_SESSION_KEY = 'owb_wholesale_push_prompt_dismissed_session';
 const LEGACY_PROMPT_DISMISS_KEY = 'owb_wholesale_push_prompt_dismissed_at';
-/** Guest soft-prompt cadence (rolling window). */
-const PROMPT_CADENCE_KEY = 'owb_wholesale_push_prompt_cadence';
+/** Legacy cadence key — cleared so old rate limits do not stick. */
+const LEGACY_PROMPT_CADENCE_KEY = 'owb_wholesale_push_prompt_cadence';
+const PWA_PENDING_ATTR_KEY = 'owb_wholesale_pwa_pending_attr';
+const PWA_ATTR_SYNCED_KEY = 'owb_wholesale_pwa_attr_synced';
 const SW_READY_TIMEOUT_MS = 12000;
-
-/** Keep in sync with backend pushSoftPrompt.service.js */
-const WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-const MAX_SHOWS_IN_WINDOW = 4;
-const MIN_GAP_MS = 42 * 60 * 60 * 1000;
-const MAX_STORED_IMPRESSIONS = 12;
 
 function waitForServiceWorkerReady(timeoutMs = SW_READY_TIMEOUT_MS) {
   return Promise.race([
@@ -60,6 +57,7 @@ export async function getPushStatus() {
 function clearLegacyPromptKeys() {
   try {
     localStorage.removeItem(LEGACY_PROMPT_DISMISS_KEY);
+    localStorage.removeItem(LEGACY_PROMPT_CADENCE_KEY);
   } catch {
     // ignore
   }
@@ -73,55 +71,6 @@ function isSessionDismissed() {
   }
 }
 
-function readGuestCadence() {
-  try {
-    const raw = localStorage.getItem(PROMPT_CADENCE_KEY);
-    if (!raw) return { shownAt: [] };
-    const parsed = JSON.parse(raw);
-    const shownAt = Array.isArray(parsed?.shownAt)
-      ? parsed.shownAt.map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0)
-      : [];
-    return { shownAt };
-  } catch {
-    return { shownAt: [] };
-  }
-}
-
-function writeGuestCadence(shownAt) {
-  try {
-    const pruned = pruneTimestamps(shownAt);
-    localStorage.setItem(
-      PROMPT_CADENCE_KEY,
-      JSON.stringify({ v: 1, shownAt: pruned })
-    );
-  } catch {
-    // ignore quota / private mode
-  }
-}
-
-function pruneTimestamps(timestamps, now = Date.now()) {
-  const cutoff = now - WINDOW_MS;
-  return (Array.isArray(timestamps) ? timestamps : [])
-    .map((n) => Number(n))
-    .filter((n) => Number.isFinite(n) && n >= cutoff)
-    .sort((a, b) => a - b)
-    .slice(-MAX_STORED_IMPRESSIONS);
-}
-
-function evaluateLocalCadence(shownAt, now = Date.now()) {
-  const recent = pruneTimestamps(shownAt, now);
-  const count = recent.length;
-  const lastMs = count > 0 ? recent[count - 1] : null;
-
-  if (count >= MAX_SHOWS_IN_WINDOW) {
-    return { allowed: false, reason: 'max_shows_in_window', count };
-  }
-  if (lastMs != null && now - lastMs < MIN_GAP_MS) {
-    return { allowed: false, reason: 'min_gap', count };
-  }
-  return { allowed: true, reason: 'ok', count };
-}
-
 function permissionAllowsSoftPrompt() {
   if (!isPushSupported()) return false;
   if (typeof Notification === 'undefined') return false;
@@ -130,21 +79,17 @@ function permissionAllowsSoftPrompt() {
 }
 
 /**
- * Sync guest check (localStorage cadence + this-session dismiss).
- * Prefer evaluatePushPromptEligibility() when login state is known.
+ * Soft prompt every visit until Allow — only blocked by granted permission
+ * or "Not now" in the current browser session.
  */
 export function shouldShowPushPrompt() {
   clearLegacyPromptKeys();
   if (!permissionAllowsSoftPrompt()) return false;
   if (isSessionDismissed()) return false;
-  return evaluateLocalCadence(readGuestCadence().shownAt).allowed;
+  return true;
 }
 
-/**
- * Logged-in → server cadence (localStorage fallback on API failure).
- * Guest → localStorage only.
- */
-export async function evaluatePushPromptEligibility({ isLoggedIn = false } = {}) {
+export async function evaluatePushPromptEligibility() {
   clearLegacyPromptKeys();
   try {
     if (!permissionAllowsSoftPrompt()) {
@@ -153,73 +98,15 @@ export async function evaluatePushPromptEligibility({ isLoggedIn = false } = {})
     if (isSessionDismissed()) {
       return { allowed: false, reason: 'session_dismissed' };
     }
-
-    if (!isLoggedIn) {
-      const local = evaluateLocalCadence(readGuestCadence().shownAt);
-      return { allowed: local.allowed, reason: local.reason, source: 'local' };
-    }
-
-    try {
-      const res = await axiosInstance.get('/push/prompt-eligibility');
-      if (res?.data?.success === true && typeof res.data.allowed === 'boolean') {
-        const local = evaluateLocalCadence(readGuestCadence().shownAt);
-        // Stricter of server + local: survives LS wipe (server) and failed impression POST (local).
-        const allowed = Boolean(res.data.allowed) && local.allowed;
-        return {
-          allowed,
-          reason: !res.data.allowed
-            ? res.data.reason || 'server_blocked'
-            : !local.allowed
-              ? local.reason
-              : 'ok',
-          source: 'server',
-        };
-      }
-    } catch {
-      // fall through to localStorage
-    }
-
-    const fallback = evaluateLocalCadence(readGuestCadence().shownAt);
-    return {
-      allowed: fallback.allowed,
-      reason: fallback.reason,
-      source: 'local_fallback',
-    };
+    return { allowed: true, reason: 'ok', source: 'visit' };
   } catch {
     return { allowed: false, reason: 'error' };
   }
 }
 
-/**
- * Record one soft-prompt show. Safe to call multiple times (min-gap / session).
- */
-export async function recordPushPromptImpression({ isLoggedIn = false } = {}) {
-  const now = Date.now();
-
-  try {
-    const { shownAt } = readGuestCadence();
-    const cadence = evaluateLocalCadence(shownAt, now);
-    if (cadence.allowed) {
-      writeGuestCadence([...shownAt, now]);
-    }
-  } catch {
-    // ignore
-  }
-
-  if (!isLoggedIn) {
-    return { recorded: true, source: 'local' };
-  }
-
-  try {
-    const res = await axiosInstance.post('/push/prompt-impression');
-    return {
-      recorded: Boolean(res?.data?.recorded),
-      source: 'server',
-      reason: res?.data?.reason,
-    };
-  } catch {
-    return { recorded: false, source: 'server_failed' };
-  }
+/** Kept for callers; no longer rate-limits soft prompts. */
+export async function recordPushPromptImpression() {
+  return { recorded: true, source: 'noop' };
 }
 
 export function dismissPushPrompt() {
@@ -230,6 +117,7 @@ export function dismissPushPrompt() {
   }
   try {
     localStorage.removeItem(LEGACY_PROMPT_DISMISS_KEY);
+    localStorage.removeItem(LEGACY_PROMPT_CADENCE_KEY);
   } catch {
     // ignore
   }
@@ -305,4 +193,68 @@ export async function unsubscribeFromWebPush() {
   await subscription.unsubscribe();
   await axiosInstance.delete('/push/unsubscribe', { data: { endpoint } });
   return { unsubscribed: true };
+}
+
+/** Mark that install happened this session (guest or logged-in). */
+export function markPwaInstallPendingAttribution() {
+  try {
+    sessionStorage.setItem(PWA_PENDING_ATTR_KEY, '1');
+    sessionStorage.removeItem(PWA_ATTR_SYNCED_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * POST /push/pwa-install for logged-in users. Never throws.
+ * Safe to call from appinstalled / standalone open / after login.
+ */
+export async function reportPwaInstall() {
+  try {
+    let token = null;
+    try {
+      token = localStorage.getItem(WHOLESALE_USER_ACCESS_TOKEN_KEY);
+    } catch {
+      token = null;
+    }
+    if (!token) return false;
+    await axiosInstance.post('/push/pwa-install', {});
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Attribute PWA install when logged in and (standalone OR pending install flag).
+ * Session-deduped after a successful report.
+ */
+export async function syncPwaInstallAttribution({ isLoggedIn } = {}) {
+  if (!isLoggedIn) return false;
+
+  let pending = false;
+  try {
+    pending = sessionStorage.getItem(PWA_PENDING_ATTR_KEY) === '1';
+  } catch {
+    // ignore
+  }
+
+  if (!isPwaInstalled() && !pending) return false;
+
+  try {
+    if (sessionStorage.getItem(PWA_ATTR_SYNCED_KEY) === '1') return true;
+  } catch {
+    // ignore
+  }
+
+  const ok = await reportPwaInstall();
+  if (ok) {
+    try {
+      sessionStorage.setItem(PWA_ATTR_SYNCED_KEY, '1');
+      sessionStorage.removeItem(PWA_PENDING_ATTR_KEY);
+    } catch {
+      // ignore
+    }
+  }
+  return ok;
 }

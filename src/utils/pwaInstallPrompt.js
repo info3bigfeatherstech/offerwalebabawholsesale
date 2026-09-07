@@ -1,10 +1,12 @@
 /**
  * PWA install prompt helpers (wholesale).
- * Soft banner every visit until installed; exit reminder once per browser session.
+ * Soft banner once per page load until installed; exit reminder once per browser session.
  */
 
 const EXIT_SHOWN_SESSION_KEY = 'owb_wholesale_pwa_install_exit_shown';
 const LEGACY_DISMISS_KEY = 'owb_wholesale_pwa_install_dismissed_at';
+
+let openPromptShownForLoad = false;
 
 export function clearLegacyInstallDismiss() {
   try {
@@ -49,4 +51,14 @@ export function wasExitShownThisSession() {
 
 export function canOfferInstall() {
   return !isPwaInstalled();
+}
+
+export function claimOpenPromptShow() {
+  if (openPromptShownForLoad) return false;
+  openPromptShownForLoad = true;
+  return true;
+}
+
+export function wasOpenPromptShownThisLoad() {
+  return openPromptShownForLoad;
 }

@@ -97,6 +97,12 @@ export const store = configureStore({
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
+        ignoredActionPaths: [
+          'meta.arg',
+          'meta.baseQueryMeta',
+          'meta.baseQueryMeta.request',
+          'meta.baseQueryMeta.response',
+        ],
         ignoredPaths: [
           "wholesaler.formData.idProofFile",
           "wholesaler.formData.businessAddressProofFile",

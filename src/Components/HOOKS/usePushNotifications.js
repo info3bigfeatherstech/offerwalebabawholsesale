@@ -9,8 +9,7 @@ import {
  * canPrompt = soft UI (permission not granted) — login not required to show.
  * Sync only when syncEnabled (authenticated) + granted.
  *
- * Guests: localStorage cadence (max 4 / 7 days, ~42h gap).
- * Logged-in: server cadence with localStorage fallback.
+ * Soft prompt: every visit until Allow (session "Not now" only).
  */
 export default function usePushNotifications(syncEnabled = false, isLoggedIn = false) {
   const [supported] = useState(() => isPushSupported());

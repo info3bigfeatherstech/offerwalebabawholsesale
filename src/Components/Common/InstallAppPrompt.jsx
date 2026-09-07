@@ -14,6 +14,10 @@ import {
   getDeferredInstallPrompt,
   subscribeDeferredInstallPrompt,
 } from '../../utils/pwaDeferredPrompt';
+import {
+  markPwaInstallPendingAttribution,
+  reportPwaInstall,
+} from '../../utils/pushNotifications';
 
 /**
  * Centered install modal — Magic UI notification-card look.
@@ -81,7 +85,11 @@ const InstallAppPrompt = ({
       if (document.visibilityState === 'hidden') tryShowExit();
     };
     document.addEventListener('visibilitychange', onVisibility);
-    const onInstalled = () => setPromptVisible(false);
+    const onInstalled = () => {
+      setPromptVisible(false);
+      markPwaInstallPendingAttribution();
+      void reportPwaInstall();
+    };
     window.addEventListener('appinstalled', onInstalled);
 
     return () => {
