@@ -45,7 +45,7 @@ const emptyForm = () => ({
   minimumOrderQuantity: "",
   soldInfo: { enabled: false, count: "" },
   fomo: { enabled: false, type: "viewing_now", viewingNow: "", productLeft: "", customMessage: "" },
-  isFeatured: false, status: "draft",
+  isFeatured: false, status: "active",
 });
 
 const ProductModal = ({ onClose, brands, setBrands }) => {

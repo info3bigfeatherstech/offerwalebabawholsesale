@@ -45,6 +45,7 @@ const PushNotificationPrompt = ({
         // ignore
       }
       toast.info('Please login to enable notifications.');
+      onDismiss?.();
       onNeedLogin?.();
       return;
     }

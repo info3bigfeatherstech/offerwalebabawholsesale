@@ -255,12 +255,41 @@ export const selectAdminOrdersDateQueryArgs = createSelector([selectAdminOrdersU
 });
 
 /**
- * Summary cards + tab badge counts: always all-time (ignore date/search filters).
- * Filters apply only to the orders table via list query args.
+ * Lifetime summary args (stable frozen ref for RTK Query cache when no date filter).
+ * Prefer selectAdminOrdersSummaryQueryArgs in the UI so cards follow the date filter.
  */
 export const ADMIN_ORDERS_SUMMARY_ALL_TIME_ARGS = Object.freeze({ rangePreset: 'all' });
 
-export const selectAdminOrdersSummaryQueryArgs = () => ADMIN_ORDERS_SUMMARY_ALL_TIME_ARGS;
+/**
+ * Summary cards + tab badge counts follow the active date filter
+ * (Today / last7 / last30 / custom from+to). Default (no date filter) = all-time.
+ * Incomplete custom range falls back to all-time (same as list). Search does not
+ * change summary window — only the date preset does (client requirement).
+ * Storefront isolation is server-side (x-storefront + adminScope.orderMatch).
+ */
+export const selectAdminOrdersSummaryQueryArgs = createSelector(
+  [selectAdminOrdersUi],
+  (ui) => {
+    try {
+      if (!isOrdersDateFilterActive(ui?.datePreset)) {
+        return ADMIN_ORDERS_SUMMARY_ALL_TIME_ARGS;
+      }
+      const dateArgs = buildDateQueryArgs(ui);
+      if (!dateArgs || typeof dateArgs !== 'object') {
+        return ADMIN_ORDERS_SUMMARY_ALL_TIME_ARGS;
+      }
+      if (dateArgs.from && dateArgs.to) {
+        return { from: dateArgs.from, to: dateArgs.to };
+      }
+      if (dateArgs.rangePreset && dateArgs.rangePreset !== 'all') {
+        return { rangePreset: dateArgs.rangePreset };
+      }
+      return ADMIN_ORDERS_SUMMARY_ALL_TIME_ARGS;
+    } catch {
+      return ADMIN_ORDERS_SUMMARY_ALL_TIME_ARGS;
+    }
+  }
+);
 
 /** RTO tab UI state — lifetime by default (not Orders tab's last-30 window). */
 const rtoInitialState = {

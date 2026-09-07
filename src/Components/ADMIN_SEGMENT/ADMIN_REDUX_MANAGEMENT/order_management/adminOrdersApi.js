@@ -49,8 +49,10 @@ export const adminOrdersApi = createApi({
   keepUnusedDataFor: 30,
   endpoints: (builder) => ({
     /**
-     * Dashboard cards + tab counts (always all-time — ignore table filters).
-     * GET /api/admin/orders/summary?rangePreset=all
+     * Dashboard cards + tab counts.
+     * Pass rangePreset / from+to from selectAdminOrdersSummaryQueryArgs so cards
+     * match the Orders date filter. Storefront scoped via admin axios header.
+     * GET /api/admin/orders/summary
      */
     getAdminOrdersSummary: builder.query({
       query: (arg = {}) => {

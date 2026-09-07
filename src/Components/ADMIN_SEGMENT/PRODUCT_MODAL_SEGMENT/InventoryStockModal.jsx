@@ -16,6 +16,8 @@ import {
   clearInventoryStockMessages,
 } from "../ADMIN_REDUX_MANAGEMENT/inventoryStockSlice";
 
+const STOREFRONT = "wholesale";
+
 const EMPTY_SUMMARY = {
   name: "",
   title: "",
@@ -52,6 +54,75 @@ const ProductThumb = ({ url, alt, size = "lg" }) => {
   );
 };
 
+function mapRowsFromProduct(p) {
+  return buildVariantStockRows(p, { storefront: STOREFRONT }).map((row) => ({
+    ...row,
+    quantity: displayNumericInput(row.quantity),
+    lowStockThreshold: displayNumericInput(row.lowStockThreshold ?? ""),
+    basePrice: displayNumericInput(row.basePrice ?? ""),
+    salePrice: displayNumericInput(row.salePrice ?? ""),
+  }));
+}
+
+/** Maps UI Base/Sale → wholesaleBase / wholesaleSale for this storefront. */
+function buildPayloadVariants(rows) {
+  const variants = [];
+  for (const row of rows) {
+    const entry = { productCode: row.productCode };
+    let hasField = false;
+
+    if (row.quantity !== "" && row.quantity != null) {
+      const qty = parseInt(String(row.quantity), 10);
+      if (Number.isNaN(qty) || qty < 0) {
+        return { error: `Invalid quantity for ${row.label}` };
+      }
+      entry.quantity = qty;
+      hasField = true;
+    }
+
+    if (row.lowStockThreshold !== "" && row.lowStockThreshold != null) {
+      const lst = parseInt(String(row.lowStockThreshold), 10);
+      if (Number.isNaN(lst) || lst < 0) {
+        return { error: `Invalid low stock threshold for ${row.label}` };
+      }
+      entry.lowStockThreshold = lst;
+      hasField = true;
+    }
+
+    if (row.basePrice === "" || row.basePrice == null) {
+      return { error: `Base price is required for ${row.label}` };
+    }
+    const base = Number(row.basePrice);
+    if (!Number.isFinite(base) || base < 0) {
+      return { error: `Invalid base price for ${row.label}` };
+    }
+
+    const price = { wholesaleBase: base };
+    if (row.salePrice === "" || row.salePrice == null) {
+      price.wholesaleSale = null;
+    } else {
+      const sale = Number(row.salePrice);
+      if (!Number.isFinite(sale) || sale < 0) {
+        return { error: `Invalid sale price for ${row.label}` };
+      }
+      if (sale >= base) {
+        return { error: `Sale price must be less than base price for ${row.label}` };
+      }
+      price.wholesaleSale = sale;
+    }
+
+    entry.price = price;
+    hasField = true;
+
+    if (hasField) variants.push(entry);
+  }
+
+  if (!variants.length) {
+    return { error: "Update at least one stock or price field" };
+  }
+  return { variants };
+}
+
 const InventoryStockModal = ({ product, onClose, onSaved }) => {
   const dispatch = useDispatch();
   const { loading, error, successMessage } = useSelector((s) => s.inventoryStock);
@@ -66,16 +137,10 @@ const InventoryStockModal = ({ product, onClose, onSaved }) => {
     let cancelled = false;
 
     const applyProduct = (p) => {
-      const variantRows = buildVariantStockRows(p);
+      const variantRows = mapRowsFromProduct(p);
       if (!variantRows.length) return false;
       setSummary(buildProductSummary(p));
-      setRows(
-        variantRows.map((row) => ({
-          ...row,
-          quantity: displayNumericInput(row.quantity),
-          lowStockThreshold: displayNumericInput(row.lowStockThreshold ?? ""),
-        }))
-      );
+      setRows(variantRows);
       return true;
     };
 
@@ -131,13 +196,13 @@ const InventoryStockModal = ({ product, onClose, onSaved }) => {
 
   const hasChanges = useMemo(() => rows.length > 0, [rows]);
 
-  const setRowField = (index, field, raw) => {
+  const setRowField = (index, field, raw, { allowDecimals = false } = {}) => {
     setRows((prev) =>
       prev.map((row, i) =>
         i === index
           ? {
               ...row,
-              [field]: normalizeNumericTyping(raw, { allowDecimals: false }),
+              [field]: normalizeNumericTyping(raw, { allowDecimals }),
             }
           : row
       )
@@ -148,47 +213,23 @@ const InventoryStockModal = ({ product, onClose, onSaved }) => {
     e.preventDefault();
     if (!product?.slug || !rows.length) return;
 
-    const variants = [];
-    for (const row of rows) {
-      const entry = { productCode: row.productCode };
-      const qtyRaw = row.quantity;
-      const lstRaw = row.lowStockThreshold;
-
-      if (qtyRaw !== "" && qtyRaw != null) {
-        const qty = parseInt(qtyRaw, 10);
-        if (Number.isNaN(qty) || qty < 0) {
-          toast.error(`Invalid quantity for ${row.label}`);
-          return;
-        }
-        entry.quantity = qty;
+    try {
+      const result = buildPayloadVariants(rows);
+      if (result.error) {
+        toast.error(result.error);
+        return;
       }
-      if (lstRaw !== "" && lstRaw != null) {
-        const lst = parseInt(lstRaw, 10);
-        if (Number.isNaN(lst) || lst < 0) {
-          toast.error(`Invalid low stock threshold for ${row.label}`);
-          return;
-        }
-        entry.lowStockThreshold = lst;
-      }
-      if (entry.quantity === undefined && entry.lowStockThreshold === undefined) {
-        continue;
-      }
-      variants.push(entry);
+      dispatch(patchProductInventory({ slug: product.slug, variants: result.variants }));
+    } catch (err) {
+      toast.error(err?.message || "Could not prepare update");
     }
-
-    if (!variants.length) {
-      toast.error("Update at least one quantity or low stock threshold");
-      return;
-    }
-
-    dispatch(patchProductInventory({ slug: product.slug, variants }));
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-          <h2 className="text-lg font-semibold text-gray-900">Update Stock</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Update Stock & Prices</h2>
           <button
             type="button"
             onClick={onClose}
@@ -236,7 +277,7 @@ const InventoryStockModal = ({ product, onClose, onSaved }) => {
                 </div>
 
                 <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Variant stock ({rows.length})
+                  Variant stock & prices ({rows.length})
                 </p>
 
                 <div className="space-y-4">
@@ -292,6 +333,42 @@ const InventoryStockModal = ({ product, onClose, onSaved }) => {
                             placeholder="5"
                           />
                         </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-600">
+                            Base price
+                          </label>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={row.basePrice}
+                            onChange={(e) =>
+                              setRowField(index, "basePrice", e.target.value, {
+                                allowDecimals: true,
+                              })
+                            }
+                            onFocus={selectAllOnFocus}
+                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                            placeholder="0"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-600">
+                            Sale price
+                          </label>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={row.salePrice}
+                            onChange={(e) =>
+                              setRowField(index, "salePrice", e.target.value, {
+                                allowDecimals: true,
+                              })
+                            }
+                            onFocus={selectAllOnFocus}
+                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                            placeholder="Optional"
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -318,7 +395,7 @@ const InventoryStockModal = ({ product, onClose, onSaved }) => {
               disabled={loading || fetching || !!fetchError || !hasChanges}
               className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {loading ? "Saving…" : "Save Stock"}
+              {loading ? "Saving…" : "Save"}
             </button>
           </div>
         </form>

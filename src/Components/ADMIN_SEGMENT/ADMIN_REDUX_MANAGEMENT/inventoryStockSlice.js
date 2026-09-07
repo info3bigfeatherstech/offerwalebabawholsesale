@@ -40,9 +40,10 @@ const inventoryStockSlice = createSlice({
         state.error = null;
         state.successMessage = null;
       })
-      .addCase(patchProductInventory.fulfilled, (state) => {
+      .addCase(patchProductInventory.fulfilled, (state, action) => {
         state.loading = false;
-        state.successMessage = "Inventory updated successfully";
+        state.successMessage =
+          action.payload?.message || "Inventory and prices updated successfully";
       })
       .addCase(patchProductInventory.rejected, (state, action) => {
         state.loading = false;

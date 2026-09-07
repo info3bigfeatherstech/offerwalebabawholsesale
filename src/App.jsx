@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { openModal } from './Components/REDUX_FEATURES/REDUX_SLICES/WHOLESALE/wholesalerSlice';
+import { openModal, selectIsModalOpen } from './Components/REDUX_FEATURES/REDUX_SLICES/WHOLESALE/wholesalerSlice';
 import { isPwaInstalled } from './utils/pwaInstallPrompt';
 import { subscribeToWebPush } from './utils/pushNotifications';
 import Navbar from './Components/Common/Navbar';
@@ -29,6 +29,8 @@ import  WhatsAppFloat  from './Components/WHATSAPP_FLOAT/WhatsAppFloat'
 // import { fetchCart, loadGuestCart } from './Components/REDUX_FEATURES/REDUX_SLICES/UserCart/userCartSlice';
 // import { fetchWishlist, loadGuestWishlist } from './Components/REDUX_FEATURES/REDUX_SLICES/UserWIshlist/userWishlistSLice';
 
+
+//import examples
 // ── These two are fine at app-level — they power Navbar badges ───────────────
 import useWishlistInit from "./Components/HOOKS/useWishlistInit";
 import useCartInit from "./Components/HOOKS/useCartInit";
@@ -189,18 +191,20 @@ function SessionHandler() {
     isAuthenticated && !isAdminRoute,
     isAuthenticated
   );
+  const isAuthOpen = useSelector(selectIsModalOpen);
   const [pushPromptVisible, setPushPromptVisible] = useState(false);
   const [installPromptOpen, setInstallPromptOpen] = useState(() => !isPwaInstalled());
 
+  // Never stack push over login (auth modal was below push z-index).
   useEffect(() => {
-    if (isAdminRoute || !canShowPushPrompt || installPromptOpen) {
+    if (isAdminRoute || !canShowPushPrompt || installPromptOpen || isAuthOpen) {
       setPushPromptVisible(false);
       return undefined;
     }
     const delayMs = isPwaInstalled() ? 900 : 800;
     const t = window.setTimeout(() => setPushPromptVisible(true), delayMs);
     return () => window.clearTimeout(t);
-  }, [isAdminRoute, canShowPushPrompt, installPromptOpen]);
+  }, [isAdminRoute, canShowPushPrompt, installPromptOpen, isAuthOpen]);
 
   useEffect(() => {
     if (!isAuthenticated || isAdminRoute) return undefined;

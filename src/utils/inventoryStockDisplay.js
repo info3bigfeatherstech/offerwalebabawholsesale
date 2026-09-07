@@ -1,4 +1,4 @@
-/** Thumbnail + labels for inventory stock modal (admin). */
+/** Thumbnail + labels for inventory stock / price modal (admin). */
 
 export function getVariantThumbUrl(variant, product) {
   const vImages = Array.isArray(variant?.images) ? variant.images : [];
@@ -45,14 +45,33 @@ export function buildProductSummary(product) {
   };
 }
 
-export function buildVariantStockRows(product) {
+/**
+ * @param {object} product
+ * @param {{ storefront?: 'ecomm'|'wholesale' }} [opts]
+ * Ecomm rows edit price.base/sale; wholesale rows edit wholesaleBase/wholesaleSale.
+ */
+export function buildVariantStockRows(product, opts = {}) {
+  const storefront =
+    String(opts.storefront || "wholesale").toLowerCase() === "ecomm"
+      ? "ecomm"
+      : "wholesale";
   const variants = Array.isArray(product?.variants) ? product.variants : [];
-  return variants.map((v, idx) => ({
-    productCode: v.productCode,
-    sku: v.sku || "",
-    label: getVariantDisplayLabel(v, idx),
-    thumbUrl: getVariantThumbUrl(v, product),
-    quantity: v.inventory?.quantity,
-    lowStockThreshold: v.inventory?.lowStockThreshold,
-  }));
+  return variants.map((v, idx) => {
+    const price = v?.price || {};
+    const basePrice =
+      storefront === "wholesale" ? price.wholesaleBase : price.base;
+    const salePrice =
+      storefront === "wholesale" ? price.wholesaleSale : price.sale;
+    return {
+      productCode: v.productCode,
+      sku: v.sku || "",
+      label: getVariantDisplayLabel(v, idx),
+      thumbUrl: getVariantThumbUrl(v, product),
+      quantity: v.inventory?.quantity,
+      lowStockThreshold: v.inventory?.lowStockThreshold,
+      basePrice,
+      salePrice,
+      priceMode: storefront,
+    };
+  });
 }

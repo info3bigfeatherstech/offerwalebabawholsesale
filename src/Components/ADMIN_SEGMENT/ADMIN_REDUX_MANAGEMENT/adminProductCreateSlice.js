@@ -116,7 +116,13 @@ export const createProduct = createAsyncThunk(
       if (productData.description) fd.append("description", productData.description);
       if (productData.category) fd.append("category", productData.category);
       if (productData.brand) fd.append("brand", productData.brand);
-      if (productData.status) fd.append("status", productData.status);
+      // Single listing defaults to active when omitted (draft only if explicitly set).
+      fd.append(
+        "status",
+        ["draft", "active", "archived"].includes(String(productData.status || "").toLowerCase())
+          ? String(productData.status).toLowerCase()
+          : "active"
+      );
       if (productData.isFeatured !== undefined) fd.append("isFeatured", String(productData.isFeatured));
       if (productData.hsnCode) fd.append("hsnCode", productData.hsnCode);
       if (productData.taxRate !== undefined && productData.taxRate !== "") fd.append("gstRate", String(productData.taxRate));

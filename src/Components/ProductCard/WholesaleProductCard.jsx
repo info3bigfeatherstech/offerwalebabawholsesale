@@ -280,8 +280,8 @@ const WholesaleProductCard = ({ product, index = 0 }) => {
 
         {/* Version 2: uses canPurchase + availabilityMeta label (not just "Out of Stock") */}
         {!canPurchase && (
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-            <span className="text-white text-[10px] md:text-[13px] font-black uppercase tracking-widest bg-black/60 px-3 py-1 rounded-full">
+          <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
+            <span className="text-white text-[8px] md:text-[10px] font-bold uppercase tracking-wide bg-black/45 px-2 py-0.5 rounded-full">
               {availabilityMeta.label}
             </span>
           </div>

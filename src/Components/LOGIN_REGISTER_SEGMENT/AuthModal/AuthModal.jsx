@@ -57,7 +57,7 @@ const AuthModal = () => {
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center sm:p-4"
+      className="fixed inset-0 z-[9500] flex items-end sm:items-center justify-center sm:p-4"
       style={{ backgroundColor: "rgba(15, 23, 42, 0.7)", backdropFilter: "blur(4px)" }}
       onClick={handleBackdropClick}
     >
